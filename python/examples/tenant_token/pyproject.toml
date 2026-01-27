@@ -1,7 +1,7 @@
 [project]
-name = "mcp-descope-example-organizational-token"
+name = "mcp-descope-example-tenant-token"
 version = "0.1.0"
-description = "Organizational/tenant token example for MCP Descope SDK"
+description = "Tenant token example for MCP Descope SDK"
 requires-python = ">=3.8"
 dependencies = [
     "mcp>=1.0.0",

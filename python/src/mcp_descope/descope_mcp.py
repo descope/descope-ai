@@ -28,7 +28,7 @@ from mcp.server import FastMCP
 
 from . import __version__
 from .connections import get_connection_token as _get_connection_token
-from .session import validate_token_and_get_user_id as _validate_token_and_get_user_id
+from .session import validate_token as _validate_token, validate_token_and_get_user_id as _validate_token_and_get_user_id
 from .types import DescopeConfig, ErrorResponse, TokenResponse
 
 logger = logging.getLogger(__name__)
@@ -214,12 +214,32 @@ class DescopeMCP:
         """Get the underlying DescopeClient instance."""
         return self._client
     
+    def validate_token(
+        self,
+        access_token: str,
+        audience: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Validate token and return full validation result.
+        
+        Args:
+            access_token: MCP server access token
+            audience: Optional audience claim (defaults to mcp_server_url)
+            
+        Returns:
+            Full validation result dictionary with user ID, tenant info, scopes, etc.
+        """
+        return _validate_token(
+            access_token=access_token,
+            descope_client=self._client,
+            audience=audience or self.mcp_server_url
+        )
+    
     def validate_token_and_get_user_id(
         self,
         access_token: str,
         audience: Optional[str] = None
     ) -> str:
-        """Validate MCP server access token and extract user ID.
+        """Validate token and get user ID (convenience method).
         
         Args:
             access_token: MCP server access token from the request

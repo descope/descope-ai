@@ -45,7 +45,7 @@ cd fastmcp_auth
 uv sync && uv run python fastmcp_descope_auth_example.py
 ```
 
-### 4. Tenant Token (`organizational_token/`)
+### 4. Tenant Token (`tenant_token/`)
 
 Demonstrates fetching tenant tokens using management key:
 - Tenant token fetching with management key
@@ -54,7 +54,7 @@ Demonstrates fetching tenant tokens using management key:
 
 **Quick Start:**
 ```bash
-cd organizational_token
+cd tenant_token
 uv sync && uv run python fetch_tenant_token_example.py
 ```
 

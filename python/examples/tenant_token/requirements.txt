@@ -1,4 +1,4 @@
-# Organizational token example dependencies
+# Tenant token example dependencies
 # Install the SDK in development mode from the parent directory first:
 # cd ../.. && pip install -e .
 

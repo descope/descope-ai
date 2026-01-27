@@ -17,7 +17,7 @@ from .descope_mcp import (
     init_descope_mcp,
 )
 from .server import DescopeMCPServer
-from .session import validate_token_and_get_user_id
+from .session import validate_token, validate_token_and_get_user_id
 from .types import (
     DescopeConfig,
     TokenRequest,
@@ -38,6 +38,7 @@ __all__ = [
     "DescopeMCP",
     "get_descope_client",
     "init_descope_mcp",
+    "validate_token",
     "validate_token_and_get_user_id",
     "get_connection_token",
     "create_auth_check",

@@ -19,7 +19,7 @@ This example demonstrates how to use tenant tokens with the MCP Descope SDK. Ten
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Navigate to this directory
-cd examples/organizational_token
+cd examples/tenant_token
 
 # Install dependencies
 uv sync
@@ -32,7 +32,7 @@ uv run python fetch_tenant_token_example.py
 
 ```bash
 # Navigate to this directory
-cd examples/organizational_token
+cd examples/tenant_token
 
 # Create a virtual environment (recommended)
 python -m venv venv
