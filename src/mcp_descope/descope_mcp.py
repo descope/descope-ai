@@ -1,0 +1,843 @@
+"""DescopeMCP SDK client and initialization for Descope MCP integration.
+
+This module provides the main DescopeMCP client class and SDK functionality including:
+- DescopeMCP class (similar to DescopeClient in Descope SDK)
+- Global context and initialization
+- DescopeClient creation and configuration
+- FastMCP integration helpers
+- Utility functions for headers and SDK configuration
+"""
+
+import logging
+import platform
+from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import urlparse
+
+try:
+    from importlib.metadata import version
+except ImportError:  # pragma: no cover
+    try:
+        from importlib_metadata import version
+    except ImportError:
+        from pkg_resources import get_distribution as version
+
+# Import DescopeClient from descope SDK
+# This is safe - we're importing from the descope package, not conflicting with our module name
+from descope import DescopeClient  # type: ignore
+from mcp.server import FastMCP
+
+from . import __version__
+from .connections import get_connection_token as _get_connection_token
+from .session import validate_token_and_get_user_id as _validate_token_and_get_user_id
+from .types import DescopeConfig, ErrorResponse, TokenResponse
+
+logger = logging.getLogger(__name__)
+
+
+def _get_sdk_version() -> str:
+    """Get the version of this SDK."""
+    try:
+        # First try to get from package metadata
+        return version("mcp-descope")  # type: ignore
+    except Exception:
+        try:
+            # Fallback to package's __version__
+            return __version__
+        except Exception:
+            return "unknown"
+
+
+def _get_default_headers() -> Dict[str, str]:
+    """Get default headers for MCP Descope SDK requests (internal use only).
+    
+    These headers identify the SDK making the request for Descope's internal tracking.
+    The DescopeClient automatically includes these headers in all requests it makes.
+    
+    Note: This function is for internal SDK use only. Users should not need to
+    manually add these headers - they are automatically included by DescopeClient.
+    
+    The DescopeClient already includes headers like:
+    - x-descope-sdk-name: python
+    - x-descope-sdk-version: <descope-sdk-version>
+    - x-descope-sdk-python-version: <python-version>
+    - x-descope-project-id: <project-id>
+    - Authorization: Bearer <project-id>:<management-key>
+    
+    Returns:
+        Dictionary of default headers (for internal SDK use only)
+    """
+    return {
+        "Content-Type": "application/json",
+        "x-descope-sdk-name": "mcp-python",
+        "x-descope-sdk-python-version": platform.python_version(),
+        "x-descope-sdk-version": _get_sdk_version(),
+    }
+
+
+def _extract_project_id_from_url(url: str) -> Optional[str]:
+    """Extract project ID from well-known URL.
+    
+    Args:
+        url: Well-known URL (e.g., https://api.descope.com/P123456/.well-known/openid-configuration)
+        
+    Returns:
+        Project ID or None if not found
+    """
+    try:
+        parsed_url = urlparse(url)
+        path_parts = [p for p in parsed_url.path.split('/') if p]
+        # Project ID is typically the first part after the domain
+        # Format: /P123456/.well-known/openid-configuration
+        for part in path_parts:
+            if part.startswith('P') and len(part) > 1:
+                return part
+        return None
+    except Exception:
+        return None
+
+
+# Global context for SDK initialization
+class _DescopeContext:
+    """Global context for Descope SDK configuration."""
+    
+    def __init__(self):
+        self.config: Optional[DescopeConfig] = None
+        self.client: Optional[DescopeClient] = None
+        self.mcp_server_url: Optional[str] = None  # MCP server URL for audience validation
+    
+    def initialize(self, well_known_url: str, management_key: Optional[str] = None, mcp_server_url: Optional[str] = None):
+        """Initialize the global Descope context.
+        
+        Args:
+            well_known_url: MCP server well-known URL
+            management_key: Optional management key for token operations
+            mcp_server_url: Optional MCP server URL to use as audience claim (defaults to well_known_url)
+        """
+        self.config = DescopeConfig(
+            well_known_url=well_known_url,
+            management_key=management_key
+        )
+        # Use mcp_server_url if provided, otherwise use well_known_url as audience
+        self.mcp_server_url = mcp_server_url or well_known_url
+        self.client = _get_descope_client(self.config, self.mcp_server_url)
+    
+    def get_client(self) -> Optional[DescopeClient]:
+        """Get the configured DescopeClient."""
+        return self.client
+    
+    def get_config(self) -> Optional[DescopeConfig]:
+        """Get the configured DescopeConfig."""
+        return self.config
+    
+    def get_mcp_server_url(self) -> Optional[str]:
+        """Get the MCP server URL for audience validation."""
+        return self.mcp_server_url
+    
+    def reset(self):
+        """Reset the global context."""
+        self.config = None
+        self.client = None
+        self.mcp_server_url = None
+
+
+# Global context instance
+_context = _DescopeContext()
+
+
+class DescopeMCP:
+    """Descope MCP SDK client, similar to DescopeClient in the Descope Python SDK.
+    
+    This class provides a class-based API for the Descope MCP SDK, allowing you to
+    instantiate a client and use it explicitly rather than relying on global state.
+    
+    Example:
+        ```python
+        from mcp_descope import DescopeMCP
+        
+        # Create a client instance
+        mcp = DescopeMCP(
+            well_known_url="https://api.descope.com/your-project-id/.well-known/openid-configuration",
+            management_key="your-management-key",
+            mcp_server_url="https://your-mcp-server.com"
+        )
+        
+        # Use the client methods
+        user_id = mcp.validate_token_and_get_user_id(access_token)
+        token = mcp.get_connection_token(user_id="user-123", app_id="google-calendar")
+        ```
+    
+    You can also use the global initialization function for convenience:
+        ```python
+        from mcp_descope import DescopeMCP as init_descope_mcp
+        
+        # Initialize global state
+        init_descope_mcp(...)
+        
+        # Then use standalone functions
+        from mcp_descope import validate_token_and_get_user_id, get_connection_token
+        ```
+    """
+    
+    def __init__(
+        self,
+        well_known_url: str,
+        management_key: Optional[str] = None,
+        mcp_server_url: Optional[str] = None
+    ):
+        """Initialize the Descope MCP client.
+        
+        Args:
+            well_known_url: MCP server well-known URL (e.g., https://api.descope.com/your-project-id/.well-known/openid-configuration)
+            management_key: Optional management key for token operations (required for token validation and connection tokens)
+            mcp_server_url: MCP server URL to use as audience claim for token validation.
+                           This should be the public URL of your MCP server.
+                           If not provided, defaults to well_known_url.
+                           This URL will be validated against the 'aud' claim in tokens.
+        """
+        self.config = DescopeConfig(
+            well_known_url=well_known_url,
+            management_key=management_key
+        )
+        self.mcp_server_url = mcp_server_url or well_known_url
+        self._client = _get_descope_client(self.config, self.mcp_server_url)
+        
+        if not mcp_server_url:
+            import warnings
+            warnings.warn(
+                "mcp_server_url not provided. Using well_known_url as audience. "
+                "For better security, provide a specific MCP server URL.",
+                UserWarning
+            )
+    
+    @property
+    def descope_client(self) -> Optional[DescopeClient]:
+        """Get the underlying DescopeClient instance."""
+        return self._client
+    
+    def validate_token_and_get_user_id(
+        self,
+        access_token: str,
+        audience: Optional[str] = None
+    ) -> str:
+        """Validate MCP server access token and extract user ID.
+        
+        Args:
+            access_token: MCP server access token from the request
+            audience: Optional audience claim to validate (uses instance's mcp_server_url if not provided)
+            
+        Returns:
+            User ID extracted from the validated token
+            
+        Raises:
+            ValueError: If token is invalid or user ID not found
+            Exception: If token validation fails
+        """
+        return _validate_token_and_get_user_id(
+            access_token=access_token,
+            descope_client=self._client,
+            audience=audience or self.mcp_server_url
+        )
+    
+    def get_connection_token(
+        self,
+        user_id: str,
+        app_id: str,
+        scopes: Optional[List[str]] = None,
+        tenant_id: Optional[str] = None,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Get connection token from Descope for a user.
+        
+        Args:
+            user_id: User ID from the validated MCP server token
+            app_id: Connection/outbound application ID configured in Descope
+            scopes: Optional scopes to request (if None, uses default scopes)
+            tenant_id: Optional tenant ID for tenant-level tokens
+            options: Optional additional options (e.g., {"refreshToken": True})
+            
+        Returns:
+            Connection access token string
+            
+        Raises:
+            ValueError: If client not available
+            Exception: If token retrieval fails
+        """
+        return _get_connection_token(
+            user_id=user_id,
+            app_id=app_id,
+            scopes=scopes,
+            tenant_id=tenant_id,
+            options=options,
+            descope_client=self._client
+        )
+    
+    def create_auth_check(
+        self,
+        required_scopes: Optional[List[str]] = None
+    ) -> Callable:
+        """Create an auth check function for FastMCP.
+        
+        Args:
+            required_scopes: List of required scopes (empty list means auth only, no scope check)
+            
+        Returns:
+            Auth check function that can be used with FastMCP decorators
+        """
+        return create_auth_check(
+            required_scopes=required_scopes,
+            descope_client=self._client
+        )
+
+
+def init_descope_mcp(
+    well_known_url: str,
+    management_key: Optional[str] = None,
+    mcp_server_url: Optional[str] = None
+) -> None:
+    """Initialize the Descope MCP SDK with global configuration (convenience function).
+    
+    This is a convenience function that initializes global state. For a class-based
+    API similar to DescopeClient, use the DescopeMCP class instead.
+    
+    Call this once at the top of your code, and all SDK functions will use
+    this configuration automatically. The MCP server URL will be used as the
+    audience claim when validating tokens to ensure tokens are only accepted
+    if they were issued for this specific MCP server.
+    
+    Args:
+        well_known_url: MCP server well-known URL (e.g., https://api.descope.com/your-project-id/.well-known/openid-configuration)
+        management_key: Optional management key for token operations (required for token validation and connection tokens)
+        mcp_server_url: MCP server URL to use as audience claim for token validation.
+                       This should be the public URL of your MCP server.
+                       If not provided, defaults to well_known_url.
+                       This URL will be validated against the 'aud' claim in tokens.
+        
+    Example:
+        ```python
+        from mcp_descope import init_descope_mcp, get_connection_token
+        
+        # Initialize once at the top
+        # IMPORTANT: Provide your MCP server URL for audience validation
+        init_descope_mcp(
+            well_known_url="https://api.descope.com/your-project-id/.well-known/openid-configuration",
+            management_key="your-management-key",  # Required for token validation
+            mcp_server_url="https://your-mcp-server.com"  # Required: Used as audience claim
+        )
+        
+        # Now all functions work without passing config/client
+        token = get_connection_token(
+            user_id="user-123",
+            app_id="google-calendar"
+        )
+        ```
+        
+    Note:
+        The MCP server URL is critical for security. It ensures that tokens
+        issued for other applications cannot be used with your MCP server.
+        Always provide a specific MCP server URL, not a generic well-known URL.
+        
+        For a class-based API (recommended), use the DescopeMCP class:
+        ```python
+        from mcp_descope import DescopeMCP
+        
+        mcp = DescopeMCP(...)
+        mcp.validate_token_and_get_user_id(...)
+        ```
+    """
+    if not mcp_server_url:
+        # If not provided, use well_known_url but warn that this may not be ideal
+        import warnings
+        warnings.warn(
+            "mcp_server_url not provided. Using well_known_url as audience. "
+            "For better security, provide a specific MCP server URL.",
+            UserWarning
+        )
+    _context.initialize(well_known_url, management_key, mcp_server_url)
+
+
+
+
+def _get_descope_client(config: DescopeConfig, mcp_server_url: Optional[str] = None) -> Optional[DescopeClient]:
+    """Get or create a DescopeClient from config.
+    
+    Args:
+        config: Descope configuration
+        mcp_server_url: Optional MCP server URL (stored for audience validation)
+        
+    Returns:
+        DescopeClient instance or None if management_key not provided
+        
+    Note:
+        The DescopeClient is initialized with project_id and management_key.
+        The mcp_server_url is stored separately in the context and used as the
+        audience claim when calling validate_session() to ensure tokens are
+        only accepted if they were issued for this specific MCP server.
+        
+        The DescopeClient automatically includes proper headers:
+        - x-descope-sdk-name: python
+        - x-descope-sdk-version: <descope-sdk-version>
+        - x-descope-sdk-python-version: <python-version>
+        - x-descope-project-id: <project-id>
+        - Authorization: Bearer <project-id>:<management-key>
+    """
+    if not config.management_key:
+        return None
+    
+    # Try to extract project_id from well_known_url
+    project_id = _extract_project_id_from_url(config.well_known_url)
+    
+    if project_id:
+        # Initialize DescopeClient with project_id and management_key
+        # Note: The MCP server URL (audience) is not passed to DescopeClient initialization,
+        # but is stored in the context and used when calling validate_session()
+        return DescopeClient(
+            project_id=project_id,
+            management_key=config.management_key,
+        )
+    return None
+
+
+# Session validation and connection token functions are now in separate modules:
+# - session.py: validate_token_and_get_user_id()
+# - connections.py: get_connection_token()
+# These are imported at the top of this file for backward compatibility.
+
+
+def get_descope_client(config: DescopeConfig) -> DescopeClient:
+    """Get DescopeClient from config, raising error if not available.
+    
+    Args:
+        config: Descope configuration
+        
+    Returns:
+        DescopeClient instance
+        
+    Raises:
+        ValueError: If management_key is not provided
+        
+    Example:
+        ```python
+        from mcp_descope import DescopeConfig, get_descope_client
+        
+        config = DescopeConfig(well_known_url="...", management_key="...")
+        client = get_descope_client(config)
+        ```
+    """
+    client = _get_descope_client(config)
+    if not client:
+        raise ValueError(
+            "Descope management_key is required. "
+            "Provide it in DescopeConfig to use token validation and outbound app tokens."
+        )
+    return client
+
+
+def create_auth_check(
+    required_scopes: Optional[List[str]] = None,
+    descope_client: Optional[DescopeClient] = None
+) -> Callable:
+    """Create an auth check function for FastMCP that validates Descope token and scopes.
+    
+    This function creates an auth check that can be used with FastMCP's @mcp.tool(auth=...)
+    decorator. It validates the MCP server access token and checks for required scopes.
+    
+    Args:
+        required_scopes: List of required scopes (empty list means auth only, no scope check)
+        descope_client: Optional Descope client instance (uses global context if not provided)
+        
+    Returns:
+        Auth check function that can be used with FastMCP decorators
+        
+    Example:
+        ```python
+        from mcp_descope import DescopeMCP, create_auth_check
+        
+        # Initialize once
+        DescopeMCP(well_known_url="...", management_key="...")
+        
+        # Require authentication only
+        @mcp.tool(auth=create_auth_check([]))
+        def authenticated_tool():
+            return "Authenticated"
+        
+        # Require specific scopes
+        @mcp.tool(auth=create_auth_check(["read", "write"]))
+        def read_write_tool():
+            return "Read/write access"
+        ```
+    """
+    # Use provided client or global context
+    if descope_client is None:
+        descope_client = _context.get_client()
+        if descope_client is None:
+            raise ValueError(
+                "No Descope client available. "
+                "Either call DescopeMCP() first or pass descope_client parameter."
+            )
+    
+    required_scopes = required_scopes or []
+    
+    def check(ctx) -> bool:
+        """Check if request has valid token and required scopes."""
+        # Get access token from context
+        # In FastMCP v3.0.0, this would come from ctx.token
+        token = getattr(ctx, 'token', None)
+        
+        if not token:
+            return False
+        
+        # Extract token string if it's an object
+        token_str = token.token if hasattr(token, 'token') else str(token)
+        
+        try:
+            # Get audience from context if available
+            audience = _context.get_mcp_server_url() if descope_client is None else None
+            
+            # Validate token and get user ID (uses closure's descope_client)
+            # Audience validation ensures token is intended for this MCP server
+            # Import here to avoid circular dependency
+            from .session import validate_token_and_get_user_id
+            user_id = validate_token_and_get_user_id(token_str, descope_client, audience=audience)
+            
+            # If no scopes required, just check authentication
+            if not required_scopes:
+                return True
+            
+            # Check if token has required scopes
+            token_scopes = getattr(token, 'scopes', [])
+            if isinstance(token_scopes, str):
+                token_scopes = token_scopes.split()
+            
+            # Verify all required scopes are present
+            required_set = set(required_scopes)
+            token_set = set(token_scopes)
+            
+            return required_set.issubset(token_set)
+        except Exception as e:
+            logger.error(f"Auth check failed: {e}")
+            return False
+    
+    return check
+
+def add_descope_tools(mcp: FastMCP, config: DescopeConfig) -> None:
+    """Add Descope tools to an existing FastMCP server.
+    
+    This function registers all Descope authentication tools with a FastMCP instance.
+    You can also use the individual functions directly with FastMCP decorators.
+    
+    Args:
+        mcp: FastMCP server instance to extend
+        config: Descope configuration
+        
+    Example:
+        ```python
+        from mcp.server import FastMCP
+        from mcp_descope import add_descope_tools, DescopeConfig
+        
+        # Create your FastMCP server
+        mcp = FastMCP("my-server")
+        
+        # Add Descope tools
+        config = DescopeConfig(
+            well_known_url="https://api.descope.com/your-project-id/mcp",
+            management_key="your-management-key"  # Optional
+        )
+        add_descope_tools(mcp, config)
+        
+        # Add your own tools
+        @mcp.tool()
+        def my_custom_tool():
+            return "Hello"
+        
+        # Run the server
+        mcp.run()
+        ```
+        
+    Alternatively, use the functions directly:
+        ```python
+        from mcp.server import FastMCP
+        from mcp_descope.descope_mcp import fetch_user_token, DescopeConfig
+        
+        mcp = FastMCP("my-server")
+        config = DescopeConfig(well_known_url="...", management_key="...")
+        
+        @mcp.tool()
+        async def fetch_user_token_tool(app_id: str, user_id: str, ...):
+            return await fetch_user_token(config, app_id, user_id, ...)
+        ```
+    """
+    descope_client = _get_descope_client(config)
+
+    @mcp.tool()
+    async def fetch_user_token_by_scopes(
+        app_id: str,
+        user_id: str,
+        scopes: List[str],
+        options: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
+    ) -> str:
+        """Fetch user token with specific scopes."""
+        return await _fetch_user_token_by_scopes_impl(
+            descope_client, config, app_id, user_id, scopes, options, tenant_id
+        )
+
+    @mcp.tool()
+    async def fetch_user_token(
+        app_id: str,
+        user_id: str,
+        tenant_id: Optional[str] = None,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Fetch latest user token."""
+        return await _fetch_user_token_impl(
+            descope_client, config, app_id, user_id, tenant_id, options
+        )
+
+    @mcp.tool()
+    async def fetch_tenant_token_by_scopes(
+        app_id: str,
+        tenant_id: str,
+        scopes: List[str],
+        options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Fetch tenant token with specific scopes."""
+        return await _fetch_tenant_token_by_scopes_impl(
+            descope_client, config, app_id, tenant_id, scopes, options
+        )
+
+    @mcp.tool()
+    async def fetch_tenant_token(
+        app_id: str,
+        tenant_id: str,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Fetch latest tenant token."""
+        return await _fetch_tenant_token_impl(
+            descope_client, config, app_id, tenant_id, options
+        )
+
+
+# Standalone functions that can be used directly with FastMCP decorators
+async def fetch_user_token_by_scopes(
+    config: DescopeConfig,
+    app_id: str,
+    user_id: str,
+    scopes: List[str],
+    options: Optional[Dict[str, Any]] = None,
+    tenant_id: Optional[str] = None,
+) -> str:
+    """Fetch user token with specific scopes. Use this directly with FastMCP.
+    
+    Example:
+        @mcp.tool()
+        async def get_token(app_id: str, user_id: str, scopes: List[str]):
+            return await fetch_user_token_by_scopes(config, app_id, user_id, scopes)
+    """
+    descope_client = _get_descope_client(config)
+    return await _fetch_user_token_by_scopes_impl(
+        descope_client, config, app_id, user_id, scopes, options, tenant_id
+    )
+
+
+async def fetch_user_token(
+    config: DescopeConfig,
+    app_id: str,
+    user_id: str,
+    tenant_id: Optional[str] = None,
+    options: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Fetch latest user token. Use this directly with FastMCP."""
+    descope_client = _get_descope_client(config)
+    return await _fetch_user_token_impl(
+        descope_client, config, app_id, user_id, tenant_id, options
+    )
+
+
+async def fetch_tenant_token_by_scopes(
+    config: DescopeConfig,
+    app_id: str,
+    tenant_id: str,
+    scopes: List[str],
+    options: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Fetch tenant token with specific scopes. Use this directly with FastMCP."""
+    descope_client = _get_descope_client(config)
+    return await _fetch_tenant_token_by_scopes_impl(
+        descope_client, config, app_id, tenant_id, scopes, options
+    )
+
+
+async def fetch_tenant_token(
+    config: DescopeConfig,
+    app_id: str,
+    tenant_id: str,
+    options: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Fetch latest tenant token. Use this directly with FastMCP."""
+    descope_client = _get_descope_client(config)
+    return await _fetch_tenant_token_impl(
+        descope_client, config, app_id, tenant_id, options
+    )
+
+
+# Implementation functions
+async def _fetch_user_token_by_scopes_impl(
+    descope_client: Optional[DescopeClient],
+    config: DescopeConfig,
+    app_id: str,
+    user_id: str,
+    scopes: List[str],
+    options: Optional[Dict[str, Any]],
+    tenant_id: Optional[str],
+) -> str:
+    """Implementation of fetch_user_token_by_scopes."""
+    try:
+        if descope_client:
+            token = descope_client.mgmt.outbound_application.fetch_token_by_scopes(
+                app_id, user_id, scopes, options or {}, tenant_id
+            )
+        else:
+            raise NotImplementedError(
+                "Connecting to remote MCP server not yet implemented. "
+                "Please provide management_key for direct API access."
+            )
+        response = TokenResponse(token=token)
+        return response.model_dump_json()
+    except Exception as e:
+        logger.error(f"Error fetching user token by scopes: {e}")
+        error_response = ErrorResponse(error=str(e))
+        return error_response.model_dump_json()
+
+
+async def _fetch_user_token_impl(
+    descope_client: Optional[DescopeClient],
+    config: DescopeConfig,
+    app_id: str,
+    user_id: str,
+    tenant_id: Optional[str],
+    options: Optional[Dict[str, Any]],
+) -> str:
+    """Implementation of fetch_user_token."""
+    try:
+        if descope_client:
+            token = descope_client.mgmt.outbound_application.fetch_token(
+                app_id, user_id, tenant_id, options or {}
+            )
+        else:
+            raise NotImplementedError(
+                "Connecting to remote MCP server not yet implemented. "
+                "Please provide management_key for direct API access."
+            )
+        response = TokenResponse(token=token)
+        return response.model_dump_json()
+    except Exception as e:
+        logger.error(f"Error fetching user token: {e}")
+        error_response = ErrorResponse(error=str(e))
+        return error_response.model_dump_json()
+
+
+async def _fetch_tenant_token_by_scopes_impl(
+    descope_client: Optional[DescopeClient],
+    config: DescopeConfig,
+    app_id: str,
+    tenant_id: str,
+    scopes: List[str],
+    options: Optional[Dict[str, Any]],
+) -> str:
+    """Implementation of fetch_tenant_token_by_scopes."""
+    try:
+        if descope_client:
+            token = descope_client.mgmt.outbound_application.fetch_tenant_token_by_scopes(
+                app_id, tenant_id, scopes, options or {}
+            )
+        else:
+            raise NotImplementedError(
+                "Connecting to remote MCP server not yet implemented. "
+                "Please provide management_key for direct API access."
+            )
+        response = TokenResponse(token=token)
+        return response.model_dump_json()
+    except Exception as e:
+        logger.error(f"Error fetching tenant token by scopes: {e}")
+        error_response = ErrorResponse(error=str(e))
+        return error_response.model_dump_json()
+
+
+async def _fetch_tenant_token_impl(
+    descope_client: Optional[DescopeClient],
+    config: DescopeConfig,
+    app_id: str,
+    tenant_id: str,
+    options: Optional[Dict[str, Any]],
+) -> str:
+    """Implementation of fetch_tenant_token."""
+    try:
+        if descope_client:
+            token = descope_client.mgmt.outbound_application.fetch_tenant_token(
+                app_id, tenant_id, options or {}
+            )
+        else:
+            raise NotImplementedError(
+                "Connecting to remote MCP server not yet implemented. "
+                "Please provide management_key for direct API access."
+            )
+        response = TokenResponse(token=token)
+        return response.model_dump_json()
+    except Exception as e:
+        logger.error(f"Error fetching tenant token: {e}")
+        error_response = ErrorResponse(error=str(e))
+        return error_response.model_dump_json()
+
+
+def create_descope_fastmcp_server(
+    name: str = "descope",
+    config: Optional[DescopeConfig] = None,
+    **fastmcp_kwargs: Any,
+) -> FastMCP:
+    """Create a FastMCP server with Descope tools pre-configured.
+    
+    Args:
+        name: Server name
+        config: Descope configuration (if None, will load from environment)
+        **fastmcp_kwargs: Additional arguments to pass to FastMCP constructor
+        
+    Returns:
+        Configured FastMCP server with Descope tools
+        
+    Example:
+        ```python
+        from mcp_descope import create_descope_fastmcp_server, DescopeConfig
+        
+        # Create server with config
+        config = DescopeConfig(
+            well_known_url="https://api.descope.com/your-project-id/mcp",
+            management_key="your-management-key"  # Optional
+        )
+        mcp = create_descope_fastmcp_server("my-server", config=config)
+        
+        # Add your own tools
+        @mcp.tool()
+        def my_tool():
+            return "Hello"
+        
+        # Run
+        mcp.run()
+        ```
+    """
+    import os
+
+    if config is None:
+        well_known_url = os.getenv("DESCOPE_MCP_WELL_KNOWN_URL", "")
+        management_key = os.getenv("DESCOPE_MANAGEMENT_KEY", "")
+        
+        if not well_known_url:
+            raise ValueError("DESCOPE_MCP_WELL_KNOWN_URL environment variable is required")
+        
+        config = DescopeConfig(
+            well_known_url=well_known_url,
+            management_key=management_key if management_key else None,
+        )
+
+    mcp = FastMCP(name, **fastmcp_kwargs)
+    add_descope_tools(mcp, config)
+    return mcp

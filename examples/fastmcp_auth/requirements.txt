@@ -1,0 +1,12 @@
+# FastMCP Descope Auth example dependencies
+# Install the SDK in development mode from the parent directory first:
+# cd ../.. && pip install -e .
+
+# Core dependencies (included when SDK is installed)
+mcp>=1.0.0
+descope>=1.0.0
+pydantic>=2.0.0
+typing-extensions>=4.0.0
+
+# Note: This example uses FastMCP v3.0.0 auth features
+# Make sure you have the correct version of FastMCP installed
