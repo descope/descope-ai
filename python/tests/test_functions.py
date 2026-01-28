@@ -36,7 +36,9 @@ class TestDirectFunctions:
             mcp_server_url="https://test-mcp-server.com"
         )
         
-        with patch('mcp_descope.session._get_descope_client', return_value=mock_descope_client):
+        with patch('mcp_descope.descope_mcp._context') as mock_context:
+            mock_context.get_client.return_value = mock_descope_client
+            mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
             user_id = validate_token_and_get_user_id("test-token")
             assert user_id == "user-123"
             mock_descope_client.validate_session.assert_called_once()
@@ -48,8 +50,8 @@ class TestDirectFunctions:
             management_key="test-key"
         )
         
-        with patch('mcp_descope.connections._get_context') as mock_context:
-            mock_context.return_value.get_client.return_value = mock_descope_client
+        with patch('mcp_descope.descope_mcp._context') as mock_context:
+            mock_context.get_client.return_value = mock_descope_client
             
             token = get_connection_token(
                 user_id="user-123",
@@ -108,6 +110,9 @@ class TestDirectFunctions:
                 management_key="test-key",
                 mcp_server_url="https://test-mcp-server.com"
             )
+            
+            # Mock the client's _client attribute
+            client._client = mock_descope_client
             
             user_id = client.validate_token_and_get_user_id("test-token")
             assert user_id == "user-123"

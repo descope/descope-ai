@@ -17,7 +17,8 @@ def test_both_sdks_can_be_imported():
     
     # Verify mcp_descope exports don't conflict
     assert hasattr(mcp_descope, 'DescopeConfig')
-    assert hasattr(mcp_descope, 'initialize')
+    assert hasattr(mcp_descope, 'DescopeMCP')
+    assert hasattr(mcp_descope, 'init_descope_mcp')
     assert hasattr(mcp_descope, 'get_descope_client')
     assert hasattr(mcp_descope, 'validate_token_and_get_user_id')
     assert hasattr(mcp_descope, 'get_connection_token')
@@ -26,10 +27,13 @@ def test_both_sdks_can_be_imported():
 def test_descope_client_class_import():
     """Test that DescopeClient can be imported from both packages."""
     from descope import DescopeClient as DescopeSDKClient
-    from mcp_descope.descope_client import DescopeClient as MCPDescopeClient
+    from mcp_descope import DescopeMCP
     
-    # They should be the same class (mcp_descope imports it from descope)
-    assert DescopeSDKClient is MCPDescopeClient
+    # DescopeMCP uses DescopeClient internally but is a different class
+    assert DescopeSDKClient is not None
+    assert DescopeMCP is not None
+    # They're different classes - DescopeMCP wraps DescopeClient
+    assert DescopeSDKClient is not DescopeMCP
 
 
 def test_no_module_name_conflicts():

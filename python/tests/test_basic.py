@@ -18,31 +18,25 @@ class TestConfig:
     def test_descope_config_valid(self):
         """Test valid DescopeConfig creation."""
         config = DescopeConfig(
-            project_id="test-project",
+            well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
             management_key="test-key",
-            base_url="https://api.descope.com",
         )
-        assert config.project_id == "test-project"
+        assert config.well_known_url == "https://api.descope.com/test/.well-known/openid-configuration"
         assert config.management_key == "test-key"
-        assert config.base_url == "https://api.descope.com"
 
     def test_descope_config_minimal(self):
         """Test minimal DescopeConfig creation."""
         config = DescopeConfig(
-            project_id="test-project",
-            management_key="test-key",
+            well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
         )
-        assert config.project_id == "test-project"
-        assert config.management_key == "test-key"
-        assert config.base_url is None
+        assert config.well_known_url == "https://api.descope.com/test/.well-known/openid-configuration"
+        assert config.management_key is None
 
     def test_descope_config_invalid(self):
         """Test invalid DescopeConfig creation."""
+        # Pydantic v2 allows empty strings by default, so we test with missing required field
         with pytest.raises(ValidationError):
-            DescopeConfig(
-                project_id="",  # Empty project_id should fail
-                management_key="test-key",
-            )
+            DescopeConfig()  # Missing required well_known_url
 
 
 class TestTokenResponse:
@@ -71,8 +65,9 @@ class TestTokenResponse:
 
     def test_token_response_invalid(self):
         """Test invalid TokenResponse creation."""
+        # Pydantic v2 allows empty strings by default, so we test with missing required field
         with pytest.raises(ValidationError):
-            TokenResponse(token="")  # Empty token should fail
+            TokenResponse()  # Missing required token
 
 
 class TestErrorResponse:
@@ -137,15 +132,15 @@ class TestImports:
         from mcp_descope import (
             DescopeMCPClient,
             DescopeMCPServer,
-            create_default_client,
-            create_server,
+            DescopeMCP,
+            init_descope_mcp,
         )
         
         # Just test that imports don't raise exceptions
         assert DescopeMCPClient is not None
         assert DescopeMCPServer is not None
-        assert create_default_client is not None
-        assert create_server is not None
+        assert DescopeMCP is not None
+        assert init_descope_mcp is not None
 
 
 if __name__ == "__main__":

@@ -188,7 +188,8 @@ class DescopeMCP:
         
         Args:
             well_known_url: MCP server well-known URL (e.g., https://api.descope.com/your-project-id/.well-known/openid-configuration)
-            management_key: Optional management key for token operations (required for token validation and connection tokens)
+            management_key: Optional management key for token operations (fallback for tenant tokens or when access tokens aren't available).
+                           By default, connection tokens are fetched using MCP server access tokens, which enables policy enforcement.
             mcp_server_url: MCP server URL to use as audience claim for token validation.
                            This should be the public URL of your MCP server.
                            If not provided, defaults to well_known_url.
@@ -265,8 +266,13 @@ class DescopeMCP:
         scopes: Optional[List[str]] = None,
         tenant_id: Optional[str] = None,
         options: Optional[Dict[str, Any]] = None,
+        access_token: Optional[str] = None,
     ) -> str:
         """Get connection token from Descope for a user.
+        
+        By default, uses the provided MCP server access token to fetch connection tokens,
+        enabling policy enforcement through Descope's Access Control Plane. Falls back
+        to management key if no access token is provided.
         
         Args:
             user_id: User ID from the validated MCP server token
@@ -274,6 +280,7 @@ class DescopeMCP:
             scopes: Optional scopes to request (if None, uses default scopes)
             tenant_id: Optional tenant ID for tenant-level tokens
             options: Optional additional options (e.g., {"refreshToken": True})
+            access_token: MCP server access token (recommended, enables policy enforcement)
             
         Returns:
             Connection access token string
@@ -288,7 +295,8 @@ class DescopeMCP:
             scopes=scopes,
             tenant_id=tenant_id,
             options=options,
-            descope_client=self._client
+            access_token=access_token,
+            descope_client=self._client if not access_token else None
         )
     
     def create_auth_check(

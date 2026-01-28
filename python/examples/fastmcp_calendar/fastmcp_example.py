@@ -64,17 +64,13 @@ def example_google_calendar_tool():
         try:
             user_id = validate_token_and_get_user_id(mcp_access_token)
             
-            # Get connection token - requires management key
-            # Can be provided via DescopeMCP initialization or passed directly
-            project_id = os.getenv("DESCOPE_PROJECT_ID", "")
-            management_key = os.getenv("DESCOPE_MANAGEMENT_KEY", "")
-            
+            # Get connection token using MCP access token (default, enables policy enforcement)
+            # Falls back to management key if access token method fails
             google_token = get_connection_token(
                 user_id=user_id,
                 app_id=GOOGLE_CALENDAR_APP_ID,
                 scopes=["https://www.googleapis.com/auth/calendar"],
-                project_id=project_id if project_id else None,
-                management_key=management_key if management_key else None
+                access_token=mcp_access_token  # Uses access token by default
             )
             
             if not httpx:

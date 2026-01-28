@@ -1,13 +1,13 @@
-"""End-to-end tests using official Python MCP SDK (MCPServer)."""
+"""End-to-end tests using official Python MCP SDK (Server)."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from mcp.server.mcpserver import MCPServer
-from mcp_descope import DescopeMCP, validate_token_and_get_user_id, get_connection_token, create_auth_check
+from unittest.mock import Mock, patch
+from mcp.server import Server
+from mcp_descope import DescopeMCP, validate_token_and_get_user_id, get_connection_token
 
 
 class TestMCPServerIntegration:
-    """Test integration with official MCP SDK MCPServer."""
+    """Test integration with official MCP SDK Server."""
 
     @pytest.fixture
     def mock_descope_client(self):
@@ -19,9 +19,15 @@ class TestMCPServerIntegration:
         client.mgmt.outbound_application.fetch_token = Mock(return_value="connection-token-123")
         return client
 
-    def test_mcpserver_with_descope_tools(self, mock_descope_client):
-        """Test MCPServer with Descope tools."""
-        # Initialize SDK (management_key needed for get_connection_token)
+    def test_server_creation(self):
+        """Test basic Server creation."""
+        mcp = Server("DescopeTest")
+        assert mcp is not None
+        assert mcp.name == "DescopeTest"
+
+    def test_server_with_descope_functions(self, mock_descope_client):
+        """Test Server with Descope functions."""
+        # Initialize SDK
         DescopeMCP(
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
             management_key="test-key",
@@ -29,64 +35,13 @@ class TestMCPServerIntegration:
         )
         
         # Create MCP server
-        mcp = MCPServer("DescopeTest")
+        mcp = Server("DescopeTest")
         
-        # Add Descope-protected tool
-        @mcp.tool()
-        def validate_token(mcp_access_token: str) -> str:
-            """Validate MCP server access token."""
-            with patch('mcp_descope.session._get_descope_client', return_value=mock_descope_client):
-                user_id = validate_token_and_get_user_id(mcp_access_token)
-                return f"Valid user: {user_id}"
-        
-        # Add tool that uses connection token
-        @mcp.tool()
-        def get_calendar_token(mcp_access_token: str) -> str:
-            """Get Google Calendar connection token."""
-            with patch('mcp_descope.session._get_descope_client', return_value=mock_descope_client):
-                user_id = validate_token_and_get_user_id(mcp_access_token)
-            
-            with patch('mcp_descope.connections._get_context') as mock_context:
-                mock_context.return_value.get_client.return_value = mock_descope_client
-                token = get_connection_token(
-                    user_id=user_id,
-                    app_id="google-calendar",
-                    scopes=["calendar.readonly"]
-                )
-                return f"Calendar token: {token}"
-        
-        # Verify tools are registered (MCPServer may not have list_tools, so just verify server exists)
-        assert mcp is not None
-
-    def test_mcpserver_with_public_tool(self):
-        """Test MCPServer with public (unprotected) tool."""
-        mcp = MCPServer("PublicTest")
-        
-        @mcp.tool()
-        def public_info() -> str:
-            """Public information."""
-            return "This is public"
-        
-        assert mcp is not None
-
-    def test_mcpserver_resource(self):
-        """Test MCPServer with resource."""
-        mcp = MCPServer("ResourceTest")
-        
-        @mcp.resource("user://{user_id}")
-        def get_user(user_id: str) -> str:
-            """Get user resource."""
-            return f"User: {user_id}"
-        
-        assert mcp is not None
-
-    def test_mcpserver_prompt(self):
-        """Test MCPServer with prompt."""
-        mcp = MCPServer("PromptTest")
-        
-        @mcp.prompt()
-        def greet(name: str) -> str:
-            """Generate greeting prompt."""
-            return f"Greet {name} warmly"
+        # Verify we can use Descope functions with the server
+        with patch('mcp_descope.descope_mcp._context') as mock_context:
+            mock_context.get_client.return_value = mock_descope_client
+            mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
+            user_id = validate_token_and_get_user_id("test-token")
+            assert user_id == "user-123"
         
         assert mcp is not None

@@ -2,11 +2,14 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatchling.build]
+packages = ["src/mcp_descope"]
+
 [project]
 name = "mcp-descope"
 version = "0.1.0"
 description = "MCP SDK for Descope authentication"
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.8"
 license = "MIT"
 authors = [
@@ -30,6 +33,7 @@ dependencies = [
     "descope>=1.0.0",
     "pydantic>=2.0.0",
     "typing-extensions>=4.0.0",
+    "httpx>=0.24.0",  # Required for access token authentication
 ]
 
 [project.optional-dependencies]
