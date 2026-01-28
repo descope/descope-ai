@@ -1,0 +1,13 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "mcp-descope",
+      "version-file": "python/pyproject.toml",
+      "extra-files": [
+        "python/src/mcp_descope/__init__.py"
+      ]
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}
