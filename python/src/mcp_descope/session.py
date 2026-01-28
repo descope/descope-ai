@@ -186,27 +186,26 @@ def validate_token(
                 "Either call DescopeMCP() first or pass descope_client parameter."
             )
     
-    # Use provided audience or get from global context
+    # Use provided audience or get from global context. If still not available,
+    # skip audience validation (do not validate the JWT 'aud' claim).
     if audience is None:
         context = _get_context()
         audience = context.get_mcp_server_url()
-    
-    # Ensure audience is always validated for security
-    if not audience:
-        raise ValueError(
-            "MCP server URL (audience) is required for token validation. "
-            "Call DescopeMCP() with mcp_server_url parameter to set the audience."
-        )
     
     try:
         # Use Descope SDK's validate_session method
         # This properly validates the token signature, expiration, and audience claim
         # The audience parameter validates the 'aud' claim in the JWT token
         # This ensures tokens are only accepted if they were issued for this specific MCP server
-        validation_result = descope_client.validate_session(
-            session_token=access_token,
-            audience=audience
-        )
+        if audience:
+            validation_result = descope_client.validate_session(
+                session_token=access_token,
+                audience=audience
+            )
+        else:
+            validation_result = descope_client.validate_session(
+                session_token=access_token
+            )
         
         # Return the full validation result
         # This includes user ID, tenant info, scopes, and all other token claims

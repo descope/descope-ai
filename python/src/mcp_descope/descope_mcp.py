@@ -206,23 +206,15 @@ class DescopeMCP:
                            By default, connection tokens are fetched using MCP server access tokens, which enables policy enforcement.
             mcp_server_url: MCP server URL to use as audience claim for token validation.
                            This should be the public URL of your MCP server.
-                           If not provided, defaults to well_known_url.
-                           This URL will be validated against the 'aud' claim in tokens.
+                           If not provided, audience validation is skipped unless an
+                           explicit audience is passed to validate methods.
         """
         self.config = DescopeConfig(
             well_known_url=well_known_url,
             management_key=management_key
         )
-        self.mcp_server_url = mcp_server_url or well_known_url
+        self.mcp_server_url = mcp_server_url
         self._client = _get_descope_client(self.config, self.mcp_server_url)
-        
-        if not mcp_server_url:
-            import warnings
-            warnings.warn(
-                "mcp_server_url not provided. Using well_known_url as audience. "
-                "For better security, provide a specific MCP server URL.",
-                UserWarning
-            )
     
     @property
     def descope_client(self) -> Optional[DescopeClient]:
@@ -238,7 +230,7 @@ class DescopeMCP:
         
         Args:
             access_token: MCP server access token
-            audience: Optional audience claim (defaults to mcp_server_url)
+            audience: Optional audience claim (defaults to mcp_server_url if set)
             
         Returns:
             TokenValidationResult dictionary with user ID, tenant info, scopes, etc.
@@ -247,7 +239,7 @@ class DescopeMCP:
         return _validate_token(
             access_token=access_token,
             descope_client=self._client,
-            audience=audience or self.mcp_server_url
+            audience=audience if audience is not None else self.mcp_server_url
         )
     
     def validate_token_and_get_user_id(
@@ -259,7 +251,7 @@ class DescopeMCP:
         
         Args:
             access_token: MCP server access token from the request
-            audience: Optional audience claim to validate (uses instance's mcp_server_url if not provided)
+            audience: Optional audience claim to validate (uses instance's mcp_server_url if set)
             
         Returns:
             User ID extracted from the validated token
@@ -271,7 +263,7 @@ class DescopeMCP:
         return _validate_token_and_get_user_id(
             access_token=access_token,
             descope_client=self._client,
-            audience=audience or self.mcp_server_url
+            audience=audience if audience is not None else self.mcp_server_url
         )
     
     def validate_token_require_scopes_and_get_user_id(
@@ -289,7 +281,7 @@ class DescopeMCP:
         Args:
             access_token: MCP server access token
             required_scopes: List of scopes required for the operation
-            audience: Optional audience claim (defaults to mcp_server_url)
+            audience: Optional audience claim (defaults to mcp_server_url if set)
             error_description: Optional custom error description
             
         Returns:
@@ -303,7 +295,7 @@ class DescopeMCP:
             access_token=access_token,
             required_scopes=required_scopes,
             descope_client=self._client,
-            audience=audience or self.mcp_server_url,
+            audience=audience if audience is not None else self.mcp_server_url,
             error_description=error_description
         )
     
@@ -440,14 +432,6 @@ def init_descope_mcp(
         mcp.validate_token_and_get_user_id(...)
         ```
     """
-    if not mcp_server_url:
-        # If not provided, use well_known_url but warn that this may not be ideal
-        import warnings
-        warnings.warn(
-            "mcp_server_url not provided. Using well_known_url as audience. "
-            "For better security, provide a specific MCP server URL.",
-            UserWarning
-        )
     _context.initialize(well_known_url, management_key, mcp_server_url)
 
 
