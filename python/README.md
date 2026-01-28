@@ -1,130 +1,248 @@
-# Descope AI SDK
+# Descope Python MCP SDK
 
-*Super* lightweight Python SDK for interacting with Descope's MCP (Model Context Protocol) authorization server.
+Python SDK for integrating Descope authentication and authorization with MCP (Model Context Protocol) servers.
 
-This repository contains utilities to help you enforce and manage Descope tokens in your MCP Servers.
+## Overview
 
-## Requirements
+The Descope Python MCP SDK provides authorization for MCP servers:
 
-- Python 3.8 or newer
+- **Token validation** with scope and audience enforcement
+- **Connection token retrieval** using MCP server access tokens (default) or management keys
+- **Scope validation** following the MCP spec for insufficient scope errors
+- **Integration** with FastMCP and the official MCP SDK
 
 ## Installation
 
-Install from `uv` (recommended):
-
 ```bash
-uv add descope-mcp
+pip install mcp-descope
 ```
 
-Or, if you're using `pip`:
-
-```bash
-pip install descope-mcp
-```
-
-Or install from source for development:
-
-```bash
-git clone https://github.com/descope/mcp-python.git
-cd mcp-python
-python -m pip install -e .
-```
-
-## Quickstart
-
-Set your API key in an environment variable:
-
-```bash
-export DESCOPE_API_KEY="your_api_key_here"
-```
-
-Basic synchronous example:
+## Quick Start
 
 ```python
-from descope_mcp import MCPClient
-import os
+from mcp.server import FastMCP
+from mcp_descope import DescopeMCP, validate_token, require_scopes, get_connection_token, InsufficientScopeError
 
-client = MCPClient(api_key=os.getenv("DESCOPE_API_KEY"))
+# Initialize SDK
+DescopeMCP(
+    well_known_url="https://api.descope.com/your-project-id/.well-known/openid-configuration",
+    mcp_server_url="https://your-mcp-server.com"
+)
 
-response = client.call_model("model-name", {"input": "Hello, world!"})
-print(response)
+mcp = FastMCP("my-server")
+
+@mcp.tool()
+async def get_calendar_events(mcp_access_token: str) -> str:
+    """Get calendar events - requires 'calendar.read' scope."""
+    try:
+        # Validate token and check scopes
+        token_result = validate_token(mcp_access_token)
+        require_scopes(token_result, ["calendar.read"])
+        
+        # Get user ID and connection token
+        user_id = token_result.get("sub") or token_result.get("userId")
+        google_token = get_connection_token(
+            user_id=user_id,
+            app_id="google-calendar",
+            scopes=["https://www.googleapis.com/auth/calendar"],
+            access_token=mcp_access_token
+        )
+        
+        # Use token to call external API
+        return "Events retrieved"
+    except InsufficientScopeError as e:
+        # Return MCP spec-compliant error response
+        return e.to_json()
 ```
 
-Basic asynchronous example:
+## Set up your Descope MCP Server (and get your `.well-known` URL)
+
+In Descope, create/configure your MCP server in **Agentic Identity Hub → MCP Servers → Settings**. Descope’s docs walk through the settings, including:
+
+- **MCP Server URL**: if set, this becomes the `aud` claim in access tokens (and should match the `mcp_server_url` you pass to this SDK).
+- **Discovery endpoints**: use the server’s discovery settings to copy the MCP Server **`.well-known` OpenID configuration URL** you pass as `well_known_url`.
+
+See: [Descope docs — MCP Server Settings](https://docs.descope.com/agentic-identity-hub/mcp-servers/settings)
+
+## Token Validation
+
+Validate MCP server access tokens with signature verification, expiration checking, and audience validation:
 
 ```python
-import asyncio
-from descope_mcp import AsyncMCPClient
-import os
+from mcp_descope import validate_token, validate_token_and_get_user_id
 
-async def main():
-	client = AsyncMCPClient(api_key=os.getenv("DESCOPE_API_KEY"))
-	response = await client.call_model("model-name", {"input": "Hello, async world!"})
-	print(response)
+# Get full validation result
+result = validate_token(access_token)
+user_id = result.get("sub") or result.get("userId")
+scopes = result.get("scopes", [])
 
-asyncio.run(main())
+# Or get user ID directly
+user_id = validate_token_and_get_user_id(access_token)
 ```
 
-Notes:
-- Replace `"model-name"` and the input payload with the model and parameters your application needs.
-- The SDK returns plain Python objects (dicts) representing the JSON response from Descope MCP.
+## Scope Validation
+
+The SDK provides scope validation that follows the MCP spec's [Runtime Insufficient Scope Errors](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#runtime-insufficient-scope-errors).
+
+### Using require_scopes()
+
+```python
+from mcp_descope import validate_token, require_scopes, InsufficientScopeError
+
+@mcp.tool()
+def my_tool(mcp_access_token: str) -> str:
+    try:
+        token_result = validate_token(mcp_access_token)
+        require_scopes(token_result, ["read", "write"])
+        return "Success"
+    except InsufficientScopeError as e:
+        # Returns MCP spec-compliant error response
+        return e.to_json()
+```
+
+### InsufficientScopeError
+
+When `require_scopes()` detects missing scopes, it raises an `InsufficientScopeError` that follows the MCP spec (RFC 6750 Section 3.1):
+
+```python
+try:
+    require_scopes(token_result, ["calendar.read"])
+except InsufficientScopeError as e:
+    missing = e.missing_scopes  # ["calendar.read"]
+    combined = e.combined_scopes  # ["read", "write", "calendar.read"]
+    scope_param = e.scope_parameter  # "read write calendar.read"
+    
+    # Get MCP spec-compliant JSON response
+    error_json = e.to_json()
+```
+
+The error includes:
+- `error`: "insufficient_scope"
+- `scope`: Space-separated list of all scopes (existing + required) - uses recommended approach
+- `error_description`: Human-readable description
+- `missing_scopes`: List of missing scopes
+- `token_scopes`: List of scopes in the token
+- `required_scopes`: List of required scopes
+
+## Connection Tokens
+
+Retrieve OAuth tokens for third-party services stored in Descope's Connections vault:
+
+```python
+from mcp_descope import get_connection_token
+
+# Get token with specific scopes (uses access token by default)
+token = get_connection_token(
+    user_id="user-123",
+    app_id="google-calendar",
+    scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+    access_token=mcp_access_token  # Enables policy enforcement
+)
+
+# Get latest token (any scopes)
+token = get_connection_token(
+    user_id="user-123",
+    app_id="google-calendar",
+    access_token=mcp_access_token
+)
+```
+
+The SDK uses MCP server access tokens by default for policy enforcement. Management keys can be used as a fallback for tenant-level tokens or when access tokens aren't available.
+
+## API Reference
+
+### DescopeMCP Class
+
+```python
+from mcp_descope import DescopeMCP
+
+mcp = DescopeMCP(
+    well_known_url: str,           # Required: MCP server well-known URL
+    management_key: Optional[str], # Optional: Fallback for connection token fetching
+    mcp_server_url: Optional[str] # Optional: Audience for token validation
+)
+```
+
+**Methods:**
+- `validate_token(access_token: str) -> TokenValidationResult` - Validates token and returns full result
+- `validate_token_and_get_user_id(access_token: str) -> str` - Validates token and returns user ID
+- `require_scopes(token_result: TokenValidationResult, required_scopes: List[str]) -> None` - Validates required scopes
+- `get_connection_token(user_id: str, app_id: str, scopes: Optional[List[str]] = None, access_token: Optional[str] = None) -> str` - Retrieves connection token
+
+### Standalone Functions
+
+```python
+from mcp_descope import (
+    validate_token,
+    validate_token_and_get_user_id,
+    require_scopes,
+    InsufficientScopeError,
+    get_connection_token,
+    init_descope_mcp,
+    TokenValidationResult
+)
+
+# Initialize global state
+init_descope_mcp(
+    well_known_url="https://api.descope.com/your-project-id/.well-known/openid-configuration",
+    mcp_server_url="https://your-mcp-server.com"
+)
+
+# Use functions directly
+result = validate_token(access_token)
+user_id = validate_token_and_get_user_id(access_token)
+require_scopes(result, ["read", "write"])
+token = get_connection_token(user_id="user-123", app_id="google-calendar", access_token=access_token)
+```
+
+## Examples
+
+See the [examples directory](./examples/) for complete working examples:
+
+- **[FastMCP Calendar](./examples/fastmcp_calendar/)** - Google Calendar integration with scope validation and connection token retrieval
+- **[Tenant Tokens](./examples/tenant_token/)** - Fetching tenant-level connection tokens
 
 ## Configuration
 
-The client can be configured via environment variables or directly when instantiating the client.
+### Well-Known URL Format
 
-- `DESCOPE_API_KEY`: (required) API key used to authenticate requests.
-- `DESCOPE_BASE_URL`: (optional) custom base URL for MCP endpoints.
-- `DESCOPE_TIMEOUT`: (optional) request timeout in seconds.
-
-Example (explicit config):
-
-```python
-from descope_mcp import MCPClient
-
-client = MCPClient(api_key="...", base_url="https://api.descope.example", timeout=30)
+```
+https://api.descope.com/{project_id}/.well-known/openid-configuration
 ```
 
-## Error handling
+The SDK automatically extracts the project ID from this URL when needed.
 
-The SDK raises exceptions for transport and API-level errors. Catch these in your application to provide retries, fallbacks, or user-friendly messages.
-
-## Development
-
-Install development dependencies (if provided):
+### Environment Variables
 
 ```bash
-python -m pip install -e .[dev]
+export DESCOPE_MCP_WELL_KNOWN_URL="https://api.descope.com/your-project-id/.well-known/openid-configuration"
+export MCP_SERVER_URL="https://your-mcp-server.com"
+export DESCOPE_MANAGEMENT_KEY="your-management-key"  # Optional
 ```
 
-Run tests (if the project includes tests):
+## Security Best Practices
 
-```bash
-pytest
-```
+1. **Always provide `mcp_server_url`** for audience validation to prevent token reuse
+2. **Use access tokens by default** to enable policy enforcement
+3. **Validate tokens on every request** - don't cache validation results
+4. **Use `require_scopes()` for scope validation** - ensures MCP spec compliance
+5. **Handle `InsufficientScopeError` properly** - return error responses using `e.to_json()`
 
-Format code with `black` and lint with `flake8` as desired.
+## Compatibility
 
-## Contributing
+- **Python**: 3.8+
+- **MCP SDK**: 1.0.0+
+- **Descope SDK**: 1.0.0+
+- **FastMCP**: 2.0+
 
-Contributions are welcome. Please follow these steps:
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Add tests for new behavior.
-4. Open a pull request describing your changes.
-
-See `CONTRIBUTING.md` (if present) for more details.
+The SDK can be imported alongside the official Descope Python SDK without conflicts.
 
 ## License
 
-See the `LICENSE` file in this repository for license details.
+MIT
 
 ## Support
 
-For usage questions and troubleshooting, visit the official Descope documentation: https://docs.descope.com or open an issue in this repository.
-
----
-
-If you want the README adapted to include real code samples from your actual client API (method names, return shapes, or advanced usage like streaming examples), share the client module or function names and I will update the examples to match exactly.
-
+- [Documentation](https://docs.descope.com)
+- [GitHub Issues](https://github.com/your-org/mcp-descope/issues)
+- [Community Slack](https://www.descope.com/community)
