@@ -17,17 +17,9 @@ from .descope_mcp import (
     init_descope_mcp,
 )
 from .server import DescopeMCPServer
-from .session import (
-    validate_token,
-    validate_token_and_get_user_id,
-    validate_token_require_scopes_and_get_user_id,
-    TokenValidationResult,
-    require_scopes,
-    InsufficientScopeError,
-)
+from .session import validate_token_and_get_user_id
 from .types import (
     DescopeConfig,
-    ErrorResponse,
     TokenRequest,
     TokenResponse,
     UserTokenRequest,
@@ -46,16 +38,10 @@ __all__ = [
     "DescopeMCP",
     "get_descope_client",
     "init_descope_mcp",
-    "validate_token",
     "validate_token_and_get_user_id",
-    "validate_token_require_scopes_and_get_user_id",
-    "TokenValidationResult",
-    "require_scopes",
-    "InsufficientScopeError",
     "get_connection_token",
     "create_auth_check",
     "DescopeConfig",
-    "ErrorResponse",
     "TokenRequest",
     "TokenResponse",
     "UserTokenRequest",

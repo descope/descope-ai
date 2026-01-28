@@ -28,7 +28,13 @@ from mcp.server import FastMCP
 
 from . import __version__
 from .connections import get_connection_token as _get_connection_token
-from .session import validate_token as _validate_token, validate_token_and_get_user_id as _validate_token_and_get_user_id
+from .session import (
+    validate_token as _validate_token,
+    validate_token_and_get_user_id as _validate_token_and_get_user_id,
+    validate_token_require_scopes_and_get_user_id as _validate_token_require_scopes_and_get_user_id,
+    require_scopes as _require_scopes,
+    TokenValidationResult,
+)
 from .types import DescopeConfig, ErrorResponse, TokenResponse
 
 logger = logging.getLogger(__name__)
@@ -219,7 +225,7 @@ class DescopeMCP:
         self,
         access_token: str,
         audience: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> "TokenValidationResult":
         """Validate token and return full validation result.
         
         Args:
@@ -227,7 +233,8 @@ class DescopeMCP:
             audience: Optional audience claim (defaults to mcp_server_url)
             
         Returns:
-            Full validation result dictionary with user ID, tenant info, scopes, etc.
+            TokenValidationResult dictionary with user ID, tenant info, scopes, etc.
+            See :class:`TokenValidationResult` for available fields.
         """
         return _validate_token(
             access_token=access_token,
@@ -258,6 +265,59 @@ class DescopeMCP:
             descope_client=self._client,
             audience=audience or self.mcp_server_url
         )
+    
+    def validate_token_require_scopes_and_get_user_id(
+        self,
+        access_token: str,
+        required_scopes: List[str],
+        audience: Optional[str] = None,
+        error_description: Optional[str] = None
+    ) -> str:
+        """Validate token, require scopes, and get user ID in one call.
+        
+        Convenience method that combines token validation, scope checking,
+        and user ID extraction.
+        
+        Args:
+            access_token: MCP server access token
+            required_scopes: List of scopes required for the operation
+            audience: Optional audience claim (defaults to mcp_server_url)
+            error_description: Optional custom error description
+            
+        Returns:
+            User ID extracted from the validated token
+            
+        Raises:
+            InsufficientScopeError: If token lacks any required scopes
+            ValueError: If token is invalid or user ID not found
+        """
+        return _validate_token_require_scopes_and_get_user_id(
+            access_token=access_token,
+            required_scopes=required_scopes,
+            descope_client=self._client,
+            audience=audience or self.mcp_server_url,
+            error_description=error_description
+        )
+    
+    def require_scopes(
+        self,
+        token_result: TokenValidationResult,
+        required_scopes: List[str],
+        error_description: Optional[str] = None
+    ) -> None:
+        """Validate that token has required scopes, raise InsufficientScopeError if not.
+        
+        This is a convenience method that wraps the standalone require_scopes function.
+        
+        Args:
+            token_result: Token validation result from validate_token()
+            required_scopes: List of scopes required for the operation
+            error_description: Optional custom error description
+            
+        Raises:
+            InsufficientScopeError: If token lacks any required scopes
+        """
+        _require_scopes(token_result, required_scopes, error_description)
     
     def get_connection_token(
         self,
@@ -464,9 +524,12 @@ def create_auth_check(
     required_scopes: Optional[List[str]] = None,
     descope_client: Optional[DescopeClient] = None
 ) -> Callable:
-    """Create an auth check function for FastMCP that validates Descope token and scopes.
+    """Create an auth check function for FastMCP 3.0+ that validates Descope token and scopes.
     
-    This function creates an auth check that can be used with FastMCP's @mcp.tool(auth=...)
+    **Note:** This function is designed for FastMCP 3.0+ which supports the `auth` parameter
+    in the `@mcp.tool()` decorator. For FastMCP 2.0, validate tokens manually in your tool functions.
+    
+    This function creates an auth check that can be used with FastMCP 3.0+'s @mcp.tool(auth=...)
     decorator. It validates the MCP server access token and checks for required scopes.
     
     Args:

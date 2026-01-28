@@ -13,7 +13,7 @@ readme = "../README.md"
 requires-python = ">=3.8"
 license = "MIT"
 authors = [
-    {name = "MCP Descope Team", email = "team@example.com"}
+    {name = "Descope", email = "support@descope.com"}
 ]
 keywords = ["mcp", "descope", "authentication", "sdk"]
 classifiers = [
@@ -29,7 +29,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0",  # Model Context Protocol SDK - compatible with versions 1.0.0+
     "descope>=1.0.0",
     "pydantic>=2.0.0",
     "typing-extensions>=4.0.0",
@@ -46,9 +46,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/mcp-descope"
-Repository = "https://github.com/your-org/mcp-descope"
-Issues = "https://github.com/your-org/mcp-descope/issues"
+Homepage = "https://descope.com"
+Repository = "https://github.com/descope/descope-ai"
+Issues = "https://github.com/descope/descope-ai/issues"
 
 [tool.black]
 line-length = 88

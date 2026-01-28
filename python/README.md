@@ -118,16 +118,38 @@ The SDK validates MCP server access tokens with:
 - **Audience validation** to prevent token reuse across servers
 - **Scope extraction** for authorization decisions
 
+#### Basic Token Validation
+
 ```python
-from mcp_descope import validate_token, validate_token_and_get_user_id
+from mcp_descope import validate_token, validate_token_and_get_user_id, TokenValidationResult
 
 # Get full validation result
-result = validate_token(access_token, audience="https://your-mcp-server.com")
+result: TokenValidationResult = validate_token(access_token)
 # Returns: {"sub": "user-123", "scopes": ["read", "write"], "tenant": {...}, ...}
 
-# Or just get user ID
+# Access token fields
+user_id = result.get("sub") or result.get("userId")
+scopes = result.get("scopes", [])
+tenant_id = result.get("tenant") or result.get("tenantId")
+
+# Or just get user ID (convenience function)
 user_id = validate_token_and_get_user_id(access_token)
 ```
+
+#### TokenValidationResult Type
+
+The `validate_token()` function returns a `TokenValidationResult` dictionary with the following fields:
+
+- `sub` (str): User ID (JWT standard subject claim)
+- `userId` (str): Alternative user ID field
+- `scopes` (List[str]): List of OAuth scopes granted to the token
+- `tenant` (str): Tenant ID (if available)
+- `tenantId` (str): Alternative tenant ID field
+- `aud` (str): Audience claim (MCP server URL)
+- `user` (Dict[str, Any]): Nested user object with additional information
+- Other JWT claims (`exp`, `iat`, `iss`, etc.)
+
+**Note:** Not all fields may be present in every token. Always use `.get()` with defaults when accessing fields.
 
 ### Connection Tokens
 
@@ -170,14 +192,21 @@ mcp = DescopeMCP(
 
 #### Methods
 
-- `validate_token(access_token: str, audience: Optional[str] = None) -> Dict[str, Any]`
+- `validate_token(access_token: str, audience: Optional[str] = None) -> TokenValidationResult`
   - Validates token and returns full validation result
+  - Returns a dictionary with user ID, scopes, tenant info, and other JWT claims
 
 - `validate_token_and_get_user_id(access_token: str, audience: Optional[str] = None) -> str`
-  - Validates token and returns user ID
+  - Validates token and returns user ID (convenience method)
+
+- `require_scopes(token_result: TokenValidationResult, required_scopes: List[str], error_description: Optional[str] = None) -> None`
+  - Validates that token has required scopes
+  - Raises `InsufficientScopeError` if any scopes are missing
+  - Follows MCP spec for insufficient scope errors
 
 - `get_connection_token(user_id: str, app_id: str, scopes: Optional[List[str]] = None, access_token: Optional[str] = None, ...) -> str`
   - Retrieves connection token (uses access_token by default)
+  - Enables policy enforcement when access_token is provided
 
 ### Standalone Functions
 
@@ -187,8 +216,11 @@ For convenience, you can also use standalone functions:
 from mcp_descope import (
     validate_token,
     validate_token_and_get_user_id,
+    require_scopes,
+    InsufficientScopeError,
     get_connection_token,
-    init_descope_mcp
+    init_descope_mcp,
+    TokenValidationResult
 )
 
 # Initialize global state
@@ -197,9 +229,143 @@ init_descope_mcp(
     mcp_server_url="https://your-mcp-server.com"
 )
 
-# Use functions without passing config
+# Validate token and get full result
+result: TokenValidationResult = validate_token(access_token)
+user_id = result.get("sub") or result.get("userId")
+scopes = result.get("scopes", [])
+
+# Or use convenience function
 user_id = validate_token_and_get_user_id(access_token)
-token = get_connection_token(user_id="user-123", app_id="google-calendar", access_token=access_token)
+
+# Require specific scopes
+try:
+    require_scopes(result, ["read", "write"])
+except InsufficientScopeError as e:
+    # Handle insufficient scope error
+    error_response = e.to_json()
+
+# Get connection token
+token = get_connection_token(
+    user_id="user-123",
+    app_id="google-calendar",
+    access_token=access_token
+)
+```
+
+### Exceptions
+
+#### InsufficientScopeError
+
+Raised when a token lacks required scopes. Follows MCP spec format.
+
+```python
+from mcp_descope import InsufficientScopeError
+
+try:
+    require_scopes(token_result, ["calendar.read"])
+except InsufficientScopeError as e:
+    # Access error information
+    missing = e.missing_scopes  # ["calendar.read"]
+    combined = e.combined_scopes  # ["read", "write", "calendar.read"]
+    scope_param = e.scope_parameter  # "read write calendar.read"
+    
+    # Get MCP spec-compliant JSON response
+    error_json = e.to_json()
+    
+    # Or get as dictionary
+    error_dict = e.to_dict()
+```
+
+### Scope Validation
+
+The SDK provides a clean API for validating required scopes, following the MCP spec for insufficient scope errors.
+
+#### Using require_scopes()
+
+```python
+from mcp_descope import validate_token, require_scopes, InsufficientScopeError
+import json
+
+@mcp.tool()
+def my_tool(mcp_access_token: str) -> str:
+    try:
+        # Validate token
+        token_result = validate_token(mcp_access_token)
+        
+        # Require specific scopes - raises InsufficientScopeError if missing
+        require_scopes(token_result, ["read", "write"])
+        
+        # If we get here, all scopes are present
+        return "Success"
+    except InsufficientScopeError as e:
+        # Return MCP spec-compliant error response
+        return e.to_json()
+```
+
+#### InsufficientScopeError
+
+When `require_scopes()` detects missing scopes, it raises an `InsufficientScopeError` exception that follows the MCP spec (RFC 6750 Section 3.1).
+
+The error includes:
+- `error`: "insufficient_scope"
+- `scope`: Space-separated list of all scopes (existing + required) - uses recommended approach
+- `error_description`: Human-readable description
+- `missing_scopes`: List of missing scopes
+- `token_scopes`: List of scopes in the token
+- `required_scopes`: List of required scopes
+
+**Example error response:**
+```json
+{
+  "error": "insufficient_scope",
+  "scope": "read write calendar.read",
+  "error_description": "Token missing required scopes: calendar.read",
+  "missing_scopes": ["calendar.read"],
+  "token_scopes": ["read", "write"],
+  "required_scopes": ["read", "write", "calendar.read"]
+}
+```
+
+The `scope` parameter uses the **recommended approach** - it includes both existing scopes from the token and newly required scopes. This prevents clients from losing previously granted permissions.
+
+#### Complete Example with Scope Validation
+
+```python
+from mcp.server import FastMCP
+from mcp_descope import (
+    DescopeMCP,
+    validate_token,
+    require_scopes,
+    InsufficientScopeError,
+    get_connection_token
+)
+import json
+
+DescopeMCP(well_known_url="...", mcp_server_url="...")
+mcp = FastMCP("my-server")
+
+@mcp.tool()
+async def get_calendar_events(mcp_access_token: str) -> str:
+    """Get calendar events - requires 'calendar.read' scope."""
+    try:
+        # Validate token and require scopes
+        token_result = validate_token(mcp_access_token)
+        require_scopes(token_result, ["calendar.read"])
+        
+        # Get user ID and connection token
+        user_id = token_result.get("sub") or token_result.get("userId")
+        google_token = get_connection_token(
+            user_id=user_id,
+            app_id="google-calendar",
+            scopes=["https://www.googleapis.com/auth/calendar"],
+            access_token=mcp_access_token
+        )
+        
+        # Make API call...
+        return json.dumps({"status": "success"})
+    except InsufficientScopeError as e:
+        # Return MCP spec-compliant error
+        return e.to_json()
 ```
 
 ### FastMCP Integration
@@ -246,8 +412,67 @@ mcp.run()
 See the [examples directory](./examples/) for complete working examples:
 
 - **[Basic Usage](./examples/basic_usage/)** - Simple token validation and connection token retrieval
-- **[FastMCP Calendar](./examples/fastmcp_calendar/)** - Google Calendar integration with FastMCP
+- **[FastMCP Calendar](./examples/fastmcp_calendar/)** - Google Calendar integration with FastMCP, including scope validation
 - **[Tenant Tokens](./examples/tenant_token/)** - Fetching tenant-level connection tokens
+
+### Example: Protected Tool with Scope Validation
+
+```python
+from mcp.server import FastMCP
+from mcp_descope import (
+    DescopeMCP,
+    validate_token,
+    require_scopes,
+    InsufficientScopeError,
+    get_connection_token
+)
+import json
+
+# Initialize SDK
+DescopeMCP(
+    well_known_url="https://api.descope.com/your-project-id/.well-known/openid-configuration",
+    mcp_server_url="https://your-mcp-server.com"
+)
+
+mcp = FastMCP("calendar-server")
+
+@mcp.tool()
+async def get_calendar_events(
+    mcp_access_token: str,
+    max_results: int = 10
+) -> str:
+    """Get Google Calendar events.
+    
+    Requires 'calendar.read' scope in the MCP access token.
+    """
+    try:
+        # Validate token
+        token_result = validate_token(mcp_access_token)
+        
+        # Require specific scope - raises InsufficientScopeError if missing
+        require_scopes(token_result, ["calendar.read"])
+        
+        # Get user ID and connection token
+        user_id = token_result.get("sub") or token_result.get("userId")
+        google_token = get_connection_token(
+            user_id=user_id,
+            app_id="google-calendar",
+            scopes=["https://www.googleapis.com/auth/calendar"],
+            access_token=mcp_access_token
+        )
+        
+        # Make API call with connection token
+        # ... (API call code)
+        
+        return json.dumps({"status": "success", "events": [...]})
+    except InsufficientScopeError as e:
+        # Return MCP spec-compliant error response
+        return e.to_json()
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+mcp.run()
+```
 
 ## Configuration
 
@@ -271,13 +496,49 @@ https://api.descope.com/{project_id}/.well-known/openid-configuration
 
 The SDK automatically extracts the project ID from this URL when needed.
 
+## Types and Models
+
+### TokenValidationResult
+
+Type definition for token validation results. All fields are optional as the exact structure may vary based on token claims.
+
+```python
+from mcp_descope import TokenValidationResult
+
+result: TokenValidationResult = validate_token(access_token)
+
+# Common fields:
+user_id = result.get("sub") or result.get("userId")
+scopes = result.get("scopes", [])
+tenant_id = result.get("tenant") or result.get("tenantId")
+audience = result.get("aud")
+```
+
+### InsufficientScopeError
+
+Exception raised when token lacks required scopes. Follows MCP spec (RFC 6750 Section 3.1).
+
+**Properties:**
+- `required_scopes`: List of scopes required for the operation
+- `token_scopes`: List of scopes present in the token
+- `missing_scopes`: List of missing scopes
+- `combined_scopes`: List of all scopes (existing + required) - recommended approach
+- `scope_parameter`: Space-separated scope string for MCP spec compliance
+- `error_description`: Human-readable error description
+
+**Methods:**
+- `to_dict()`: Convert error to dictionary
+- `to_json()`: Convert error to JSON string (MCP spec-compliant)
+
 ## Security Best Practices
 
 1. **Always provide `mcp_server_url`** for audience validation to prevent token reuse
 2. **Use access tokens by default** to enable policy enforcement
 3. **Validate tokens on every request** - don't cache validation results
-4. **Use minimal scopes** when requesting connection tokens
-5. **Store management keys securely** - only use as fallback for tenant tokens
+4. **Use `require_scopes()` for scope validation** - ensures MCP spec compliance
+5. **Handle `InsufficientScopeError` properly** - return error responses using `e.to_json()`
+6. **Use minimal scopes** when requesting connection tokens
+7. **Store management keys securely** - only use as fallback for tenant tokens
 
 ## Testing
 

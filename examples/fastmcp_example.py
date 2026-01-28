@@ -13,18 +13,15 @@ from pathlib import Path
 from typing import Optional
 import json
 
-example_dir = Path(__file__).parent
-root_dir = example_dir.parent.parent
-sdk_src = root_dir / "src"
-if sdk_src.exists():
-    sys.path.insert(0, str(sdk_src))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from mcp.server import FastMCP
 from mcp_descope import (
     DescopeMCP,
     validate_token_and_get_user_id,
-    validate_token_require_scopes_and_get_user_id,
     get_connection_token,
+    validate_token,
+    require_scopes,
     InsufficientScopeError,
 )
 try:
@@ -41,9 +38,6 @@ def create_mcp_server():
     - Connection token retrieval using MCP access tokens
     - External API calls with connection tokens
     - Public and protected tools with different scope requirements
-    
-    Note: Only one FastMCP server can run per process.
-    Each server listens on stdin/stdout for MCP protocol communication.
     """
     
     # Initialize Descope SDK
@@ -83,12 +77,22 @@ def create_mcp_server():
     def read_data(mcp_access_token: str) -> str:
         """Read data - requires 'read' scope."""
         try:
-            # Validate token, require scopes, and get user ID in one call
-            user_id = validate_token_require_scopes_and_get_user_id(
-                mcp_access_token,
-                required_scopes=["read"]
-            )
-            return f"Data read successfully for user {user_id}"
+            token_result = validate_token(mcp_access_token)
+            require_scopes(token_result, ["read"])
+            return "Data read successfully"
+        except InsufficientScopeError as e:
+            return e.to_json()
+        except Exception as e:
+            return json.dumps({"error": f"Authorization failed: {str(e)}"})
+    
+    # Scope-protected tool - requires multiple scopes
+    @mcp.tool()
+    def read_write_data(mcp_access_token: str) -> str:
+        """Read and write data - requires 'read' and 'write' scopes."""
+        try:
+            token_result = validate_token(mcp_access_token)
+            require_scopes(token_result, ["read", "write"])
+            return "Data read and written successfully"
         except InsufficientScopeError as e:
             return e.to_json()
         except Exception as e:
@@ -107,11 +111,13 @@ def create_mcp_server():
         Uses Descope connection token to access Google Calendar API.
         """
         try:
-            # Validate token, require scopes, and get user ID in one call
-            user_id = validate_token_require_scopes_and_get_user_id(
-                mcp_access_token,
-                required_scopes=["calendar.read"]
-            )
+            # Validate token and require scopes
+            token_result = validate_token(mcp_access_token)
+            require_scopes(token_result, ["calendar.read"])
+            
+            user_id = token_result.get("sub") or token_result.get("userId")
+            if not user_id:
+                return json.dumps({"error": "User ID not found in token"})
             
             # Get connection token using MCP access token (enables policy enforcement)
             google_token = get_connection_token(
@@ -186,15 +192,12 @@ def create_mcp_server():
         Requires 'calendar.read' scope in the MCP access token.
         """
         try:
-            # Validate token, require scopes, and get user ID in one call
-            user_id = validate_token_require_scopes_and_get_user_id(
-                mcp_access_token,
-                required_scopes=["calendar.read"]
-            )
-            return json.dumps({
-                "message": "Calendar list retrieved",
-                "user_id": user_id
-            })
+            # Validate token and require scopes
+            token_result = validate_token(mcp_access_token)
+            require_scopes(token_result, ["calendar.read"])
+            
+            token_scopes = token_result.get("scopes", [])
+            return json.dumps({"message": "Calendar list retrieved", "scopes": token_scopes})
         except InsufficientScopeError as e:
             return e.to_json()
     
