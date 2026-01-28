@@ -5,9 +5,12 @@ and extracting user information from validated tokens.
 """
 
 import logging
-from typing import Dict, Optional, Any, List, TypedDict
+from typing import Dict, Optional, Any, List, TypedDict, TYPE_CHECKING
 
-from descope import DescopeClient
+if TYPE_CHECKING:  # pragma: no cover
+    from descope import DescopeClient
+else:  # pragma: no cover
+    DescopeClient = Any  # type: ignore
 
 
 class InsufficientScopeError(Exception):
@@ -254,20 +257,24 @@ def validate_token_and_get_user_id(
     """
     # Use the full validate_token function and extract user_id
     validation_result = validate_token(access_token, descope_client, audience)
-        
-        # Extract user ID from validation result
-        # Descope's validate_session returns user information
-        user_id = validation_result.get('sub') or validation_result.get('userId') or validation_result.get('user_id')
-        
-        # If not in top-level, check nested user object
-        if not user_id and 'user' in validation_result:
-            user_info = validation_result['user']
-            user_id = user_info.get('userId') or user_info.get('id') or user_info.get('sub')
-        
-        if not user_id:
-            raise ValueError("User ID not found in token validation result")
-            
-        return user_id
+
+    # Extract user ID from validation result
+    # Descope's validate_session returns user information
+    user_id = (
+        validation_result.get("sub")
+        or validation_result.get("userId")
+        or validation_result.get("user_id")
+    )
+
+    # If not in top-level, check nested user object
+    if not user_id and "user" in validation_result:
+        user_info = validation_result["user"]
+        user_id = user_info.get("userId") or user_info.get("id") or user_info.get("sub")
+
+    if not user_id:
+        raise ValueError("User ID not found in token validation result")
+
+    return user_id
 
 
 def require_scopes(

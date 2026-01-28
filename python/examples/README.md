@@ -4,26 +4,14 @@ This directory contains example implementations demonstrating how to use the MCP
 
 ## Available Examples
 
-### 1. Basic Usage (`basic_usage/`)
-
-Demonstrates basic token operations:
-- Fetching user tokens with/without scopes
-- Fetching tenant tokens with/without scopes
-- Error handling
-
-**Quick Start:**
-```bash
-cd basic_usage
-uv sync && uv run python basic_usage.py
-```
-
-### 2. FastMCP Calendar (`fastmcp_calendar/`)
+### 1. FastMCP Calendar (`fastmcp_calendar/`)
 
 Demonstrates protecting MCP tools with Descope authentication and using connection tokens:
-- Session validation with audience claim
-- Scope-based authorization
-- Connection token retrieval
+- Token validation with audience claim
+- Scope-based authorization using `require_scopes()` and `validate_token_require_scopes_and_get_user_id()`
+- Connection token retrieval using MCP access tokens
 - Google Calendar API integration
+- MCP spec-compliant error handling
 
 **Quick Start:**
 ```bash
@@ -31,26 +19,13 @@ cd fastmcp_calendar
 uv sync && uv run python fastmcp_example.py
 ```
 
-### 3. FastMCP Authentication (`fastmcp_auth/`)
-
-Demonstrates FastMCP v3.0.0 authentication features:
-- Basic authentication
-- Scope-based authorization
-- Tag-based authorization
-- Custom auth checks
-
-**Quick Start:**
-```bash
-cd fastmcp_auth
-uv sync && uv run python fastmcp_descope_auth_example.py
-```
-
-### 4. Tenant Token (`tenant_token/`)
+### 2. Tenant Token (`tenant_token/`)
 
 Demonstrates fetching tenant tokens using management key:
 - Tenant token fetching with management key
 - No user session required
 - Tenant-level resource access
+- Using `DescopeMCP` class for initialization
 
 **Quick Start:**
 ```bash
@@ -66,7 +41,7 @@ Each example directory has its own `pyproject.toml` file for easy dependency man
 
 ```bash
 # Navigate to any example directory
-cd examples/basic_usage  # or fastmcp_calendar, fastmcp_auth
+cd examples/fastmcp_calendar  # or tenant_token
 
 # Install dependencies
 uv sync
@@ -79,7 +54,7 @@ uv run python <example_file>.py
 
 ```bash
 # Navigate to any example directory
-cd examples/basic_usage  # or fastmcp_calendar, fastmcp_auth
+cd examples/fastmcp_calendar  # or tenant_token
 
 # Create virtual environment
 python -m venv venv

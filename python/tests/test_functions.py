@@ -102,6 +102,79 @@ class TestDirectFunctions:
             token_data = json.loads(result)
             assert "token" in token_data
 
+    def test_fetch_tenant_token_latest_uses_latest_endpoint_with_access_token(self):
+        """Tenant latest token should call /tenant/token/latest when access_token is provided."""
+        config = DescopeConfig(
+            well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
+            management_key=None,
+        )
+
+        mock_httpx = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"token": {"accessToken": "tenant-access-token-xyz"}}
+        mock_resp.raise_for_status.return_value = None
+        mock_httpx.post.return_value = mock_resp
+
+        with patch("mcp_descope.descope_mcp.httpx", mock_httpx):
+            import asyncio
+
+            result = asyncio.run(
+                fetch_tenant_token(
+                    config=config,
+                    app_id="google-contacts",
+                    tenant_id="tenant-123",
+                    options={"forceRefresh": False},
+                    access_token="access-token-abc",
+                )
+            )
+
+        # Verify correct endpoint and auth header format
+        args, kwargs = mock_httpx.post.call_args
+        assert args[0].endswith("/v1/mgmt/outbound/app/tenant/token/latest")
+        assert kwargs["headers"]["Authorization"] == "Bearer test:access-token-abc"
+
+        import json
+
+        token_data = json.loads(result)
+        assert token_data["token"] == "tenant-access-token-xyz"
+
+    def test_fetch_tenant_token_by_scopes_uses_scopes_endpoint_with_access_token(self):
+        """Tenant scoped token should call /tenant/token when access_token is provided."""
+        config = DescopeConfig(
+            well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
+            management_key=None,
+        )
+
+        mock_httpx = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"token": {"accessToken": "tenant-access-token-scoped"}}
+        mock_resp.raise_for_status.return_value = None
+        mock_httpx.post.return_value = mock_resp
+
+        with patch("mcp_descope.descope_mcp.httpx", mock_httpx):
+            import asyncio
+
+            result = asyncio.run(
+                fetch_tenant_token_by_scopes(
+                    config=config,
+                    app_id="google-contacts",
+                    tenant_id="tenant-123",
+                    scopes=["contacts.readonly"],
+                    options={"forceRefresh": False},
+                    access_token="access-token-abc",
+                )
+            )
+
+        args, kwargs = mock_httpx.post.call_args
+        assert args[0].endswith("/v1/mgmt/outbound/app/tenant/token")
+        assert kwargs["headers"]["Authorization"] == "Bearer test:access-token-abc"
+        assert kwargs["json"]["scopes"] == ["contacts.readonly"]
+
+        import json
+
+        token_data = json.loads(result)
+        assert token_data["token"] == "tenant-access-token-scoped"
+
     def test_descope_mcp_class_based(self, mock_descope_client):
         """Test class-based API."""
         with patch('mcp_descope.descope_mcp._get_descope_client', return_value=mock_descope_client):

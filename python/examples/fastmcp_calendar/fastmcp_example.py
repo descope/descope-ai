@@ -22,7 +22,7 @@ if sdk_src.exists():
 from mcp.server import FastMCP
 from mcp_descope import (
     DescopeMCP,
-    validate_token_and_get_user_id,
+    validate_token,
     validate_token_require_scopes_and_get_user_id,
     get_connection_token,
     InsufficientScopeError,

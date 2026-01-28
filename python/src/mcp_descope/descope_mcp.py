@@ -10,8 +10,13 @@ This module provides the main DescopeMCP client class and SDK functionality incl
 
 import logging
 import platform
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 from urllib.parse import urlparse
+
+try:
+    import httpx
+except ImportError:  # pragma: no cover
+    httpx = None
 
 try:
     from importlib.metadata import version
@@ -21,9 +26,12 @@ except ImportError:  # pragma: no cover
     except ImportError:
         from pkg_resources import get_distribution as version
 
-# Import DescopeClient from descope SDK
-# This is safe - we're importing from the descope package, not conflicting with our module name
-from descope import DescopeClient  # type: ignore
+# Import DescopeClient lazily for runtime compatibility in restricted environments.
+# (Some environments may block requests/SSL initialization at import time.)
+if TYPE_CHECKING:  # pragma: no cover
+    from descope import DescopeClient
+else:  # pragma: no cover
+    DescopeClient = Any  # type: ignore
 from mcp.server import FastMCP
 
 from . import __version__
@@ -750,11 +758,12 @@ async def fetch_tenant_token_by_scopes(
     tenant_id: str,
     scopes: List[str],
     options: Optional[Dict[str, Any]] = None,
+    access_token: Optional[str] = None,
 ) -> str:
     """Fetch tenant token with specific scopes. Use this directly with FastMCP."""
     descope_client = _get_descope_client(config)
     return await _fetch_tenant_token_by_scopes_impl(
-        descope_client, config, app_id, tenant_id, scopes, options
+        descope_client, config, app_id, tenant_id, scopes, options, access_token
     )
 
 
@@ -763,11 +772,12 @@ async def fetch_tenant_token(
     app_id: str,
     tenant_id: str,
     options: Optional[Dict[str, Any]] = None,
+    access_token: Optional[str] = None,
 ) -> str:
     """Fetch latest tenant token. Use this directly with FastMCP."""
     descope_client = _get_descope_client(config)
     return await _fetch_tenant_token_impl(
-        descope_client, config, app_id, tenant_id, options
+        descope_client, config, app_id, tenant_id, options, access_token
     )
 
 
@@ -834,9 +844,42 @@ async def _fetch_tenant_token_by_scopes_impl(
     tenant_id: str,
     scopes: List[str],
     options: Optional[Dict[str, Any]],
+    access_token: Optional[str] = None,
 ) -> str:
     """Implementation of fetch_tenant_token_by_scopes."""
     try:
+        # If an MCP access token is provided, use REST API so we can authenticate with
+        # `Authorization: Bearer <PROJECT_ID:ACCESS_TOKEN>` (policy-enforced).
+        if access_token:
+            if not httpx:
+                raise ImportError(
+                    "httpx is required for access token authentication. Install with: pip install httpx"
+                )
+
+            project_id = _extract_project_id(config.well_known_url)
+            if not project_id:
+                raise ValueError(
+                    "Could not extract project_id from well_known_url. "
+                    "Expected format: https://api.descope.com/{project_id}/.well-known/openid-configuration"
+                )
+
+            url = "https://api.descope.com/v1/mgmt/outbound/app/tenant/token"
+            payload: Dict[str, Any] = {
+                "appId": app_id,
+                "tenantId": tenant_id,
+                "scopes": scopes,
+                "options": options or {},
+            }
+            headers = {
+                "Authorization": f"Bearer {project_id}:{access_token}",
+                "Content-Type": "application/json",
+            }
+            resp = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+            resp.raise_for_status()
+            data = resp.json()
+            token = data["token"]["accessToken"]
+            return TokenResponse(token=token).model_dump_json()
+
         if descope_client:
             token = descope_client.mgmt.outbound_application.fetch_tenant_token_by_scopes(
                 app_id, tenant_id, scopes, options or {}
@@ -860,9 +903,42 @@ async def _fetch_tenant_token_impl(
     app_id: str,
     tenant_id: str,
     options: Optional[Dict[str, Any]],
+    access_token: Optional[str] = None,
 ) -> str:
     """Implementation of fetch_tenant_token."""
     try:
+        # If an MCP access token is provided, use the dedicated "latest" endpoint:
+        # POST /v1/mgmt/outbound/app/tenant/token/latest
+        # with `Authorization: Bearer <PROJECT_ID:ACCESS_TOKEN>` (or management key).
+        if access_token:
+            if not httpx:
+                raise ImportError(
+                    "httpx is required for access token authentication. Install with: pip install httpx"
+                )
+
+            project_id = _extract_project_id(config.well_known_url)
+            if not project_id:
+                raise ValueError(
+                    "Could not extract project_id from well_known_url. "
+                    "Expected format: https://api.descope.com/{project_id}/.well-known/openid-configuration"
+                )
+
+            url = "https://api.descope.com/v1/mgmt/outbound/app/tenant/token/latest"
+            payload: Dict[str, Any] = {
+                "appId": app_id,
+                "tenantId": tenant_id,
+                "options": options or {},
+            }
+            headers = {
+                "Authorization": f"Bearer {project_id}:{access_token}",
+                "Content-Type": "application/json",
+            }
+            resp = httpx.post(url, headers=headers, json=payload, timeout=30.0)
+            resp.raise_for_status()
+            data = resp.json()
+            token = data["token"]["accessToken"]
+            return TokenResponse(token=token).model_dump_json()
+
         if descope_client:
             token = descope_client.mgmt.outbound_application.fetch_tenant_token(
                 app_id, tenant_id, options or {}
@@ -878,6 +954,22 @@ async def _fetch_tenant_token_impl(
         logger.error(f"Error fetching tenant token: {e}")
         error_response = ErrorResponse(error=str(e))
         return error_response.model_dump_json()
+
+
+def _extract_project_id(well_known_url: str) -> Optional[str]:
+    """Extract project ID from well-known URL.
+
+    Expected well-known URL format:
+      https://api.descope.com/{project_id}/.well-known/openid-configuration
+    """
+    try:
+        parsed = urlparse(well_known_url)
+        path_parts = [p for p in parsed.path.split("/") if p]
+        if path_parts:
+            return path_parts[0]
+    except Exception:
+        return None
+    return None
 
 
 def create_descope_fastmcp_server(

@@ -185,7 +185,7 @@ from mcp_descope import DescopeMCP
 
 mcp = DescopeMCP(
     well_known_url: str,           # Required: MCP server well-known URL
-    management_key: Optional[str], # Optional: Fallback for tenant tokens
+    management_key: Optional[str], # Optional: Fallback for user/tenant connection token fetching
     mcp_server_url: Optional[str] # Optional: Audience for token validation
 )
 ```
@@ -256,7 +256,7 @@ token = get_connection_token(
 
 #### InsufficientScopeError
 
-Raised when a token lacks required scopes. Follows MCP spec format.
+Raised when a token lacks required scopes. This follows the MCP spec’s **Runtime Insufficient Scope Errors** behavior (HTTP 403 + `WWW-Authenticate: Bearer error="insufficient_scope", scope="..."`) as described in the MCP Authorization spec: [Runtime Insufficient Scope Errors](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#runtime-insufficient-scope-errors).
 
 ```python
 from mcp_descope import InsufficientScopeError
@@ -411,9 +411,8 @@ mcp.run()
 
 See the [examples directory](./examples/) for complete working examples:
 
-- **[Basic Usage](./examples/basic_usage/)** - Simple token validation and connection token retrieval
-- **[FastMCP Calendar](./examples/fastmcp_calendar/)** - Google Calendar integration with FastMCP, including scope validation
-- **[Tenant Tokens](./examples/tenant_token/)** - Fetching tenant-level connection tokens
+- **[FastMCP Calendar](./examples/fastmcp_calendar/)** - Google Calendar integration with FastMCP, including token validation, scope checking, and connection token retrieval
+- **[Tenant Tokens](./examples/tenant_token/)** - Fetching tenant-level connection tokens using management keys
 
 ### Example: Protected Tool with Scope Validation
 

@@ -44,24 +44,24 @@ class TestFastMCP2Integration:
         with patch('mcp_descope.descope_mcp._context') as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
-        
+
             # Create auth check - will use global context
             # Note: FastMCP 2.0 doesn't support auth parameter, but we can create the check function
-        auth_check = create_auth_check(["read"])
-        
+            auth_check = create_auth_check(["read"])
+
             # Verify auth check is callable
             assert callable(auth_check)
-            
+
             mcp = FastMCP("FastMCP2AuthTest")
-            
+
             # FastMCP 2.0 doesn't support auth parameter, so we just verify setup
             @mcp.tool()
-        def protected_tool() -> str:
-            """Protected tool."""
-            return "Protected data"
-        
-        # Verify it's set up
-        assert mcp is not None
+            def protected_tool() -> str:
+                """Protected tool."""
+                return "Protected data"
+
+            # Verify it's set up
+            assert mcp is not None
 
     def test_fastmcp2_with_token_validation(self, mock_descope_client):
         """Test FastMCP 2.0 with token validation."""
@@ -137,18 +137,18 @@ class TestFastMCP2Integration:
         
         mcp = FastMCP("FastMCP2ScopeTest")
         
-            # FastMCP 2.0 doesn't support auth parameter, so we just verify setup
-            @mcp.tool()
+        # FastMCP 2.0 doesn't support auth parameter, so we just verify setup
+        @mcp.tool()
         def read_data() -> str:
             """Read data."""
             return "Data read"
         
-            @mcp.tool()
+        @mcp.tool()
         def read_write_data() -> str:
             """Read and write data."""
             return "Data read and written"
         
-            @mcp.tool()
+        @mcp.tool()
         def calendar_tool() -> str:
             """Calendar tool."""
             return "Calendar accessed"

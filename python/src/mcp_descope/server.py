@@ -2,10 +2,13 @@
 
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 from urllib.parse import urlparse
 
-from descope import DescopeClient
+if TYPE_CHECKING:  # pragma: no cover
+    from descope import DescopeClient
+else:  # pragma: no cover
+    DescopeClient = Any  # type: ignore
 from mcp.client.session import ClientSession
 from mcp.server import Server
 from mcp.server import InitializationOptions

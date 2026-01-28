@@ -5,7 +5,7 @@ outbound applications (connections) configured in Descope.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from urllib.parse import urlparse
 
 try:
@@ -13,7 +13,10 @@ try:
 except ImportError:
     httpx = None
 
-from descope import DescopeClient
+if TYPE_CHECKING:  # pragma: no cover
+    from descope import DescopeClient
+else:  # pragma: no cover
+    DescopeClient = Any  # type: ignore
 
 # Import context lazily to avoid circular dependency
 def _get_context():
