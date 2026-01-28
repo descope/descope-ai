@@ -19,7 +19,8 @@ sdk_src = root_dir / "src"
 if sdk_src.exists():
     sys.path.insert(0, str(sdk_src))
 
-from mcp.server import FastMCP
+from fastmcp import FastMCP
+from fastmcp.server.auth.providers.descope import DescopeProvider
 from mcp_descope import (
     DescopeMCP,
     validate_token,
@@ -56,7 +57,16 @@ def create_mcp_server():
     )
     
     GOOGLE_CALENDAR_APP_ID = os.getenv("GOOGLE_CALENDAR_APP_ID", "google-calendar")
-    mcp = FastMCP("descope-calendar-server")
+
+    # FastMCP auth: configure Descope as the auth layer for your MCP server
+    auth_provider = DescopeProvider(
+        config_url=os.getenv(
+            "DESCOPE_MCP_WELL_KNOWN_URL",
+            "https://api.descope.com/your-project-id/.well-known/openid-configuration",
+        ),
+        base_url=os.getenv("MCP_SERVER_URL", "https://your-mcp-server.com"),
+    )
+    mcp = FastMCP(name="descope-calendar-server", auth=auth_provider)
     
     # Public tool - no authentication required
     @mcp.tool()

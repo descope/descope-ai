@@ -44,7 +44,7 @@ pip install -r requirements.txt
 # Install the SDK in development mode from the root directory
 cd ../..
 pip install -e .
-cd examples/organizational_token
+cd examples/tenant_token
 
 # Run the example
 python fetch_tenant_token_example.py

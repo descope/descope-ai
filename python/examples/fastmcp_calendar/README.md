@@ -5,9 +5,8 @@ This example demonstrates how to protect MCP tools with Descope authentication a
 ## Prerequisites
 
 - Python 3.8 or higher
-- Descope project with:
-  - Outbound application configured for Google Calendar
-  - MCP server URL configured for audience validation
+- Descope project with an MCP Server configured (you’ll use its **`.well-known` URL** and **MCP Server URL**)
+  - See: [Descope docs — MCP Server Settings](https://docs.descope.com/agentic-identity-hub/mcp-servers/settings)
 - Google Calendar API access (OAuth app configured in Descope)
 
 ## Setup
@@ -56,7 +55,6 @@ Set the following environment variables before running:
 
 ```bash
 export DESCOPE_MCP_WELL_KNOWN_URL="https://api.descope.com/your-project-id/.well-known/openid-configuration"
-export DESCOPE_MANAGEMENT_KEY="your-management-key"
 export MCP_SERVER_URL="https://your-mcp-server.com"
 export GOOGLE_CALENDAR_APP_ID="google-calendar"
 ```
@@ -65,7 +63,6 @@ Or create a `.env` file in this directory:
 
 ```
 DESCOPE_MCP_WELL_KNOWN_URL=https://api.descope.com/your-project-id/.well-known/openid-configuration
-DESCOPE_MANAGEMENT_KEY=your-management-key
 MCP_SERVER_URL=https://your-mcp-server.com
 GOOGLE_CALENDAR_APP_ID=google-calendar
 ```
@@ -101,6 +98,5 @@ python fastmcp_example.py
 
 ## Notes
 
-- This is a demonstration example. In production, integrate with FastMCP's actual authentication system
-- The access token would come from FastMCP's request context in a real implementation
+- This example uses FastMCP’s Descope auth provider (`DescopeProvider`) so FastMCP is the auth layer for the server
 - Make sure your Descope project has the Google Calendar outbound app configured
