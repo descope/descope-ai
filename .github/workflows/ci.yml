@@ -76,7 +76,7 @@ jobs:
       - name: Run linting
         run: |
           cd python
-          black --check src/ tests/ examples/
+          ruff format --check src/ tests/ examples/
           isort --check-only src/ tests/ examples/
       - name: Run type checking
         run: |
