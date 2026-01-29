@@ -71,7 +71,7 @@ If you need to release manually:
 
 ### Steps
 
-1. **Update version** in `pyproject.toml` and `src/mcp_descope/__init__.py`
+1. **Update version** in `pyproject.toml` and `src/descope_mcp/__init__.py`
 
 2. **Build the package**:
    ```bash
@@ -85,7 +85,7 @@ If you need to release manually:
 
 4. **Test the package** (optional):
    ```bash
-   pip install dist/mcp_descope-*.whl
+   pip install dist/descope_mcp-*.whl
    ```
 
 5. **Upload to PyPI**:

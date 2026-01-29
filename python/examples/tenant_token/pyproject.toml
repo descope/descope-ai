@@ -1,14 +1,18 @@
 [project]
-name = "mcp-descope-example-tenant-token"
+name = "descope-mcp-example-tenant-token"
 version = "0.1.0"
-description = "Tenant token example for MCP Descope SDK"
-requires-python = ">=3.8"
+description = "Tenant token example for Descope MCP SDK"
+requires-python = ">=3.10"
 dependencies = [
+    "descope-mcp>=0.1.0",
     "mcp>=1.0.0",
     "descope>=1.0.0",
     "pydantic>=2.0.0",
     "typing-extensions>=4.0.0",
 ]
+
+[tool.uv.sources]
+descope-mcp = { path = "../../", editable = true }
 
 [build-system]
 requires = ["hatchling"]

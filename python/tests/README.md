@@ -55,7 +55,7 @@ pytest tests/test_fastmcp3.py
 
 ### Run with coverage
 ```bash
-pytest tests/ --cov=mcp_descope --cov-report=html
+pytest tests/ --cov=descope_mcp --cov-report=html
 ```
 
 ### Run specific test class

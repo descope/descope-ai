@@ -57,8 +57,6 @@ jobs:
           - "3.12"
           - "3.11"
           - "3.10"
-          - "3.9"
-          - "3.8"
         os:
           - ubuntu-latest
           - macos-latest
@@ -78,7 +76,7 @@ jobs:
       - name: Run linting
         run: |
           cd python
-          black --check src/ tests/ examples/
+          ruff format --check src/ tests/ examples/
           isort --check-only src/ tests/ examples/
       - name: Run type checking
         run: |
@@ -87,14 +85,16 @@ jobs:
       - name: Run test suite
         run: |
           cd python
-          pytest tests/ -v --cov=src/mcp_descope --cov-report=xml --cov-report=term
+          pytest tests/ -v --cov=src/descope_mcp --cov-report=xml --cov-report=term
         env:
-          COVERAGE_FILE: "python/coverage.${{ matrix.os }}.${{ matrix.py }}"
-      - name: Store coverage file
+          COVERAGE_FILE: ".coverage.${{ matrix.os }}.${{ matrix.py }}"
+      - name: Store coverage files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage.${{ matrix.os }}.${{ matrix.py }}
-          path: python/coverage.xml
+          path: |
+            python/.coverage.${{ matrix.os }}.${{ matrix.py }}
+            python/coverage.xml
           if-no-files-found: error
 
   coverage:
@@ -115,6 +115,21 @@ jobs:
         with:
           pattern: coverage.*
           merge-multiple: true
+          path: coverage-artifacts
+
+      - name: Prepare coverage data files
+        run: |
+          # Move all .coverage.* files from coverage-artifacts to root
+          # They may be in coverage-artifacts/python/ or coverage-artifacts/ directly
+          find coverage-artifacts -type f -name ".coverage.*" -exec mv {} . \; || true
+          # Also check for files in python subdirectory
+          find coverage-artifacts/python -type f -name ".coverage.*" -exec mv {} . \; 2>/dev/null || true
+          # Remove any XML files from root that might confuse the action
+          rm -f coverage.xml 2>/dev/null || true
+          rm -rf coverage-artifacts 2>/dev/null || true
+          # List files to verify
+          ls -la .coverage.* 2>/dev/null || echo "No .coverage files found"
+          echo "Coverage data files prepared in workspace root"
 
       - name: Coverage comment
         id: coverage_comment
@@ -123,7 +138,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MERGE_COVERAGE_FILES: true
           ANNOTATE_MISSING_LINES: true
-          VERBOSE: true
+          COVERAGE_PATH: "."
 
       - name: Store Pull Request comment to be posted
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

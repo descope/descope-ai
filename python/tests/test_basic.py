@@ -3,12 +3,12 @@
 import pytest
 from pydantic import ValidationError
 
-from mcp_descope import (
+from descope_mcp import (
     DescopeConfig,
-    TokenResponse,
     ErrorResponse,
-    UserTokenRequest,
     TenantTokenRequest,
+    TokenResponse,
+    UserTokenRequest,
 )
 
 
@@ -21,7 +21,10 @@ class TestConfig:
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
             management_key="test-key",
         )
-        assert config.well_known_url == "https://api.descope.com/test/.well-known/openid-configuration"
+        assert (
+            config.well_known_url
+            == "https://api.descope.com/test/.well-known/openid-configuration"
+        )
         assert config.management_key == "test-key"
 
     def test_descope_config_minimal(self):
@@ -29,7 +32,10 @@ class TestConfig:
         config = DescopeConfig(
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
         )
-        assert config.well_known_url == "https://api.descope.com/test/.well-known/openid-configuration"
+        assert (
+            config.well_known_url
+            == "https://api.descope.com/test/.well-known/openid-configuration"
+        )
         assert config.management_key is None
 
     def test_descope_config_invalid(self):
@@ -129,13 +135,13 @@ class TestImports:
 
     def test_main_imports(self):
         """Test that main module imports work."""
-        from mcp_descope import (
+        from descope_mcp import (
+            DescopeMCP,
             DescopeMCPClient,
             DescopeMCPServer,
-            DescopeMCP,
             init_descope_mcp,
         )
-        
+
         # Just test that imports don't raise exceptions
         assert DescopeMCPClient is not None
         assert DescopeMCPServer is not None
@@ -144,4 +150,4 @@ class TestImports:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__]) 
+    pytest.main([__file__])
