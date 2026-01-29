@@ -14,14 +14,14 @@ The Descope Python MCP SDK provides authorization for MCP servers:
 ## Installation
 
 ```bash
-pip install mcp-descope
+pip install descope-mcp
 ```
 
 ## Quick Start
 
 ```python
 from mcp.server import FastMCP
-from mcp_descope import DescopeMCP, validate_token, require_scopes, get_connection_token, InsufficientScopeError
+from descope_mcp import DescopeMCP, validate_token, require_scopes, get_connection_token, InsufficientScopeError
 
 # Initialize SDK
 DescopeMCP(
@@ -69,7 +69,7 @@ See: [Descope docs — MCP Server Settings](https://docs.descope.com/agentic-ide
 Validate MCP server access tokens with signature verification, expiration checking, and audience validation:
 
 ```python
-from mcp_descope import validate_token, validate_token_and_get_user_id
+from descope_mcp import validate_token, validate_token_and_get_user_id
 
 # Get full validation result
 result = validate_token(access_token)
@@ -87,7 +87,7 @@ The SDK provides scope validation that follows the MCP spec's [Runtime Insuffici
 ### Using require_scopes()
 
 ```python
-from mcp_descope import validate_token, require_scopes, InsufficientScopeError
+from descope_mcp import validate_token, require_scopes, InsufficientScopeError
 
 @mcp.tool()
 def my_tool(mcp_access_token: str) -> str:
@@ -129,7 +129,7 @@ The error includes:
 Retrieve OAuth tokens for third-party services stored in Descope's Connections vault:
 
 ```python
-from mcp_descope import get_connection_token
+from descope_mcp import get_connection_token
 
 # Get token with specific scopes (uses access token by default)
 token = get_connection_token(
@@ -154,7 +154,7 @@ The SDK uses MCP server access tokens by default for policy enforcement. Managem
 ### DescopeMCP Class
 
 ```python
-from mcp_descope import DescopeMCP
+from descope_mcp import DescopeMCP
 
 mcp = DescopeMCP(
     well_known_url: str,           # Required: MCP server well-known URL
@@ -172,7 +172,7 @@ mcp = DescopeMCP(
 ### Standalone Functions
 
 ```python
-from mcp_descope import (
+from descope_mcp import (
     validate_token,
     validate_token_and_get_user_id,
     require_scopes,

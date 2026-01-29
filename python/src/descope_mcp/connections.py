@@ -71,7 +71,7 @@ def get_connection_token(
         
     Example:
         ```python
-        from mcp_descope import get_connection_token
+        from descope_mcp import get_connection_token
         
         # Using MCP server access token (default, recommended)
         google_token = get_connection_token(

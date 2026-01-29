@@ -3,10 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatchling.build]
-packages = ["src/mcp_descope"]
+packages = ["src/descope_mcp"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/descope_mcp"]
 
 [project]
-name = "mcp-descope"
+name = "descope-mcp"
 version = "0.1.0"
 description = "MCP SDK for Descope authentication"
 readme = "../README.md"

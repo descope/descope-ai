@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from mcp.server import FastMCP
-from mcp_descope import DescopeMCP, validate_token_and_get_user_id, get_connection_token, create_auth_check
+from descope_mcp import DescopeMCP, validate_token_and_get_user_id, get_connection_token, create_auth_check
 
 
 class TestFastMCP2Integration:
@@ -41,7 +41,7 @@ class TestFastMCP2Integration:
         )
         
         # Mock the context to return our mock client
-        with patch('mcp_descope.descope_mcp._context') as mock_context:
+        with patch('descope_mcp.descope_mcp._context') as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
 
@@ -75,7 +75,7 @@ class TestFastMCP2Integration:
         @mcp.tool()
         def validate_user_token(mcp_access_token: str) -> str:
             """Validate user token."""
-            with patch('mcp_descope.descope_mcp._context') as mock_context:
+            with patch('descope_mcp.descope_mcp._context') as mock_context:
                 mock_context.get_client.return_value = mock_descope_client
                 mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
                 user_id = validate_token_and_get_user_id(mcp_access_token)
@@ -95,12 +95,12 @@ class TestFastMCP2Integration:
         @mcp.tool()
         def get_calendar_events(mcp_access_token: str) -> str:
             """Get calendar events using connection token."""
-            with patch('mcp_descope.descope_mcp._context') as mock_context:
+            with patch('descope_mcp.descope_mcp._context') as mock_context:
                 mock_context.get_client.return_value = mock_descope_client
                 mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
                 user_id = validate_token_and_get_user_id(mcp_access_token)
             
-            with patch('mcp_descope.descope_mcp._context') as mock_context:
+            with patch('descope_mcp.descope_mcp._context') as mock_context:
                 mock_context.get_client.return_value = mock_descope_client
                 token = get_connection_token(
                     user_id=user_id,
@@ -120,7 +120,7 @@ class TestFastMCP2Integration:
         )
         
         # Mock the context to return our mock client
-        with patch('mcp_descope.descope_mcp._context') as mock_context:
+        with patch('descope_mcp.descope_mcp._context') as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
             

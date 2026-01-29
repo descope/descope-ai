@@ -21,7 +21,7 @@ if sdk_src.exists():
 
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.descope import DescopeProvider
-from mcp_descope import (
+from descope_mcp import (
     DescopeMCP,
     validate_token,
     validate_token_require_scopes_and_get_user_id,

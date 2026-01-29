@@ -2,7 +2,7 @@
   "packages": {
     ".": {
       "release-type": "python",
-      "package-name": "mcp-descope",
+      "package-name": "descope-mcp",
       "version-file": "python/pyproject.toml",
       "extra-files": [
         "python/src/mcp_descope/__init__.py"

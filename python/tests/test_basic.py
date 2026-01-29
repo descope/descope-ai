@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from mcp_descope import (
+from descope_mcp import (
     DescopeConfig,
     TokenResponse,
     ErrorResponse,
@@ -129,7 +129,7 @@ class TestImports:
 
     def test_main_imports(self):
         """Test that main module imports work."""
-        from mcp_descope import (
+        from descope_mcp import (
             DescopeMCPClient,
             DescopeMCPServer,
             DescopeMCP,

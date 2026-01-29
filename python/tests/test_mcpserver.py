@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from mcp.server import Server
-from mcp_descope import DescopeMCP, validate_token_and_get_user_id, get_connection_token
+from descope_mcp import DescopeMCP, validate_token_and_get_user_id, get_connection_token
 
 
 class TestMCPServerIntegration:
@@ -38,7 +38,7 @@ class TestMCPServerIntegration:
         mcp = Server("DescopeTest")
         
         # Verify we can use Descope functions with the server
-        with patch('mcp_descope.descope_mcp._context') as mock_context:
+        with patch('descope_mcp.descope_mcp._context') as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
             user_id = validate_token_and_get_user_id("test-token")

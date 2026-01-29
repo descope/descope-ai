@@ -30,14 +30,14 @@ with open("pyproject.toml", "r", encoding="utf-8") as fh:
         ]
 
 setup(
-    name="mcp-descope",
+    name="descope-mcp",
     version="0.1.0",
-    author="MCP Descope Team",
-    author_email="team@example.com",
-    description="MCP SDK for Descope authentication",
+    author="Descope",
+    author_email="support@descope.com",
+    description="Descope Python MCP SDK",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/your-org/mcp-descope",
+    url="https://github.com/descope/descope-ai",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     classifiers=[
@@ -64,7 +64,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "mcp-descope-server=mcp_descope.server:main",
+            "descope-mcp-server=descope_mcp.server:main",
         ],
     },
     include_package_data=True,

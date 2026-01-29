@@ -20,8 +20,8 @@ if sdk_src.exists():
     sys.path.insert(0, str(sdk_src))
 
 from mcp.server import FastMCP
-from mcp_descope import DescopeMCP, fetch_tenant_token, fetch_tenant_token_by_scopes
-from mcp_descope.types import DescopeConfig
+from descope_mcp import DescopeMCP, fetch_tenant_token, fetch_tenant_token_by_scopes
+from descope_mcp.types import DescopeConfig
 
 
 def example_tenant_token_mcp_server():

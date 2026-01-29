@@ -3,7 +3,7 @@
 import os
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from mcp_descope import (
+from descope_mcp import (
     DescopeMCP,
     validate_token_and_get_user_id,
     get_connection_token,
@@ -36,7 +36,7 @@ class TestDirectFunctions:
             mcp_server_url="https://test-mcp-server.com"
         )
         
-        with patch('mcp_descope.descope_mcp._context') as mock_context:
+        with patch('descope_mcp.descope_mcp._context') as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
             user_id = validate_token_and_get_user_id("test-token")
@@ -50,7 +50,7 @@ class TestDirectFunctions:
             management_key="test-key"
         )
         
-        with patch('mcp_descope.descope_mcp._context') as mock_context:
+        with patch('descope_mcp.descope_mcp._context') as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             
             token = get_connection_token(
@@ -69,7 +69,7 @@ class TestDirectFunctions:
             management_key="test-key"
         )
         
-        with patch('mcp_descope.descope_mcp._get_descope_client', return_value=mock_descope_client):
+        with patch('descope_mcp.descope_mcp._get_descope_client', return_value=mock_descope_client):
             import asyncio
             result = asyncio.run(fetch_tenant_token(
                 config=config,
@@ -89,7 +89,7 @@ class TestDirectFunctions:
             management_key="test-key"
         )
         
-        with patch('mcp_descope.descope_mcp._get_descope_client', return_value=mock_descope_client):
+        with patch('descope_mcp.descope_mcp._get_descope_client', return_value=mock_descope_client):
             import asyncio
             result = asyncio.run(fetch_tenant_token_by_scopes(
                 config=config,
@@ -115,7 +115,7 @@ class TestDirectFunctions:
         mock_resp.raise_for_status.return_value = None
         mock_httpx.post.return_value = mock_resp
 
-        with patch("mcp_descope.descope_mcp.httpx", mock_httpx):
+        with patch("descope_mcp.descope_mcp.httpx", mock_httpx):
             import asyncio
 
             result = asyncio.run(
@@ -151,7 +151,7 @@ class TestDirectFunctions:
         mock_resp.raise_for_status.return_value = None
         mock_httpx.post.return_value = mock_resp
 
-        with patch("mcp_descope.descope_mcp.httpx", mock_httpx):
+        with patch("descope_mcp.descope_mcp.httpx", mock_httpx):
             import asyncio
 
             result = asyncio.run(
@@ -177,7 +177,7 @@ class TestDirectFunctions:
 
     def test_descope_mcp_class_based(self, mock_descope_client):
         """Test class-based API."""
-        with patch('mcp_descope.descope_mcp._get_descope_client', return_value=mock_descope_client):
+        with patch('descope_mcp.descope_mcp._get_descope_client', return_value=mock_descope_client):
             client = DescopeMCP(
                 well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
                 management_key="test-key",

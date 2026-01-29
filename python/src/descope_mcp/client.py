@@ -267,7 +267,7 @@ def create_default_client() -> DescopeMCPClient:
     Returns:
         Configured Descope MCP client
     """
-    return create_client(["python", "-m", "mcp_descope.server"])
+    return create_client(["python", "-m", "descope_mcp.server"])
 
 
 # Example usage functions
