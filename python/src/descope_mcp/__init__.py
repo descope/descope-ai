@@ -7,31 +7,31 @@ from .connections import get_connection_token
 from .descope_mcp import (
     DescopeMCP,
     add_descope_tools,
-    create_descope_fastmcp_server,
     create_auth_check,
-    fetch_user_token,
-    fetch_user_token_by_scopes,
+    create_descope_fastmcp_server,
     fetch_tenant_token,
     fetch_tenant_token_by_scopes,
+    fetch_user_token,
+    fetch_user_token_by_scopes,
     get_descope_client,
     init_descope_mcp,
 )
 from .server import DescopeMCPServer
 from .session import (
+    InsufficientScopeError,
+    TokenValidationResult,
+    require_scopes,
     validate_token,
     validate_token_and_get_user_id,
     validate_token_require_scopes_and_get_user_id,
-    TokenValidationResult,
-    require_scopes,
-    InsufficientScopeError,
 )
 from .types import (
     DescopeConfig,
     ErrorResponse,
+    TenantTokenRequest,
     TokenRequest,
     TokenResponse,
     UserTokenRequest,
-    TenantTokenRequest,
 )
 
 __all__ = [
@@ -60,4 +60,4 @@ __all__ = [
     "TokenResponse",
     "UserTokenRequest",
     "TenantTokenRequest",
-] 
+]

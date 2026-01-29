@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -10,8 +10,7 @@ if TYPE_CHECKING:  # pragma: no cover
 else:  # pragma: no cover
     DescopeClient = Any  # type: ignore
 from mcp.client.session import ClientSession
-from mcp.server import Server
-from mcp.server import InitializationOptions
+from mcp.server import InitializationOptions, Server
 from mcp.server.stdio import stdio_server
 from mcp.types import (
     CallToolRequest,
@@ -37,14 +36,14 @@ class DescopeMCPServer:
 
     def __init__(self, config: DescopeConfig):
         """Initialize the Descope MCP server.
-        
+
         Args:
             config: Descope configuration with well-known URL
         """
         self.config = config
         self.well_known_url = config.well_known_url
         self.management_key = config.management_key
-        
+
         # If management_key is provided, we can use DescopeClient for direct API calls
         # Otherwise, we'll connect to the remote MCP server at well_known_url
         if config.management_key:
@@ -53,9 +52,9 @@ class DescopeMCPServer:
             # The well_known_url might contain the project_id or we might need to parse it
             parsed_url = urlparse(config.well_known_url)
             # Common pattern: https://api.descope.com/{project_id}/...
-            path_parts = [p for p in parsed_url.path.split('/') if p]
+            path_parts = [p for p in parsed_url.path.split("/") if p]
             project_id = path_parts[0] if path_parts else None
-            
+
             if project_id:
                 self.descope_client = DescopeClient(
                     project_id=project_id,
@@ -66,10 +65,10 @@ class DescopeMCPServer:
                 self.descope_client = None
         else:
             self.descope_client = None
-        
+
         # Initialize MCP server
         self.server = Server("descope")
-        
+
         # Register tools
         self.server.list_tools = self._list_tools
         self.server.call_tool = self._call_tool
@@ -160,7 +159,7 @@ class DescopeMCPServer:
                 },
             ),
         ]
-        
+
         return ListToolsResult(tools=tools)
 
     async def _call_tool(self, request: CallToolRequest) -> CallToolResult:
@@ -183,7 +182,9 @@ class DescopeMCPServer:
                 content=[{"type": "text", "text": error_response.model_dump_json()}]
             )
 
-    async def _fetch_user_token_by_scopes(self, arguments: Dict[str, Any]) -> CallToolResult:
+    async def _fetch_user_token_by_scopes(
+        self, arguments: Dict[str, Any]
+    ) -> CallToolResult:
         """Fetch user token with specific scopes."""
         try:
             app_id = arguments["app_id"]
@@ -194,8 +195,10 @@ class DescopeMCPServer:
 
             # Use Descope Python SDK if available, otherwise connect to remote MCP server
             if self.descope_client:
-                token = self.descope_client.mgmt.outbound_application.fetch_token_by_scopes(
-                    app_id, user_id, scopes, options, tenant_id
+                token = (
+                    self.descope_client.mgmt.outbound_application.fetch_token_by_scopes(
+                        app_id, user_id, scopes, options, tenant_id
+                    )
                 )
             else:
                 # Connect to remote MCP server at well_known_url
@@ -246,7 +249,9 @@ class DescopeMCPServer:
                 content=[{"type": "text", "text": error_response.model_dump_json()}]
             )
 
-    async def _fetch_tenant_token_by_scopes(self, arguments: Dict[str, Any]) -> CallToolResult:
+    async def _fetch_tenant_token_by_scopes(
+        self, arguments: Dict[str, Any]
+    ) -> CallToolResult:
         """Fetch tenant token with specific scopes."""
         try:
             app_id = arguments["app_id"]
@@ -285,8 +290,10 @@ class DescopeMCPServer:
 
             # Use Descope Python SDK if available
             if self.descope_client:
-                token = self.descope_client.mgmt.outbound_application.fetch_tenant_token(
-                    app_id, tenant_id, options
+                token = (
+                    self.descope_client.mgmt.outbound_application.fetch_tenant_token(
+                        app_id, tenant_id, options
+                    )
                 )
             else:
                 raise NotImplementedError(
@@ -324,10 +331,10 @@ class DescopeMCPServer:
 
 def create_server(config: DescopeConfig) -> DescopeMCPServer:
     """Create a Descope MCP server instance.
-    
+
     Args:
         config: Descope configuration
-        
+
     Returns:
         Configured Descope MCP server
     """
@@ -337,24 +344,22 @@ def create_server(config: DescopeConfig) -> DescopeMCPServer:
 async def main():
     """Main entry point for the MCP server."""
     import os
-    
+
     # Load configuration from environment variables
     well_known_url = os.getenv("DESCOPE_MCP_WELL_KNOWN_URL", "")
     management_key = os.getenv("DESCOPE_MANAGEMENT_KEY", "")
-    
+
     if not well_known_url:
-        raise ValueError(
-            "DESCOPE_MCP_WELL_KNOWN_URL environment variable is required"
-        )
-    
+        raise ValueError("DESCOPE_MCP_WELL_KNOWN_URL environment variable is required")
+
     config = DescopeConfig(
         well_known_url=well_known_url,
         management_key=management_key if management_key else None,
     )
-    
+
     server = create_server(config)
     await server.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

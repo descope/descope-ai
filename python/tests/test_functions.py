@@ -1,15 +1,17 @@
 """End-to-end tests for SDK functions directly (no MCP server)."""
 
 import os
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from descope_mcp import (
+    DescopeConfig,
     DescopeMCP,
-    validate_token_and_get_user_id,
-    get_connection_token,
     fetch_tenant_token,
     fetch_tenant_token_by_scopes,
-    DescopeConfig,
+    get_connection_token,
+    validate_token_and_get_user_id,
 )
 
 
@@ -23,20 +25,28 @@ class TestDirectFunctions:
         client.validate_session = Mock(return_value={"sub": "user-123"})
         client.mgmt = Mock()
         client.mgmt.outbound_application = Mock()
-        client.mgmt.outbound_application.fetch_token = Mock(return_value="connection-token-123")
-        client.mgmt.outbound_application.fetch_token_by_scopes = Mock(return_value="connection-token-123")
-        client.mgmt.outbound_application.fetch_tenant_token = Mock(return_value="tenant-token-123")
-        client.mgmt.outbound_application.fetch_tenant_token_by_scopes = Mock(return_value="tenant-token-123")
+        client.mgmt.outbound_application.fetch_token = Mock(
+            return_value="connection-token-123"
+        )
+        client.mgmt.outbound_application.fetch_token_by_scopes = Mock(
+            return_value="connection-token-123"
+        )
+        client.mgmt.outbound_application.fetch_tenant_token = Mock(
+            return_value="tenant-token-123"
+        )
+        client.mgmt.outbound_application.fetch_tenant_token_by_scopes = Mock(
+            return_value="tenant-token-123"
+        )
         return client
 
     def test_validate_token_and_get_user_id(self, mock_descope_client):
         """Test token validation function."""
         DescopeMCP(
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
-            mcp_server_url="https://test-mcp-server.com"
+            mcp_server_url="https://test-mcp-server.com",
         )
-        
-        with patch('descope_mcp.descope_mcp._context') as mock_context:
+
+        with patch("descope_mcp.descope_mcp._context") as mock_context:
             mock_context.get_client.return_value = mock_descope_client
             mock_context.get_mcp_server_url.return_value = "https://test-mcp-server.com"
             user_id = validate_token_and_get_user_id("test-token")
@@ -47,18 +57,18 @@ class TestDirectFunctions:
         """Test connection token retrieval."""
         DescopeMCP(
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
-            management_key="test-key"
+            management_key="test-key",
         )
-        
-        with patch('descope_mcp.descope_mcp._context') as mock_context:
+
+        with patch("descope_mcp.descope_mcp._context") as mock_context:
             mock_context.get_client.return_value = mock_descope_client
-            
+
             token = get_connection_token(
                 user_id="user-123",
                 app_id="google-calendar",
-                scopes=["calendar.readonly"]
+                scopes=["calendar.readonly"],
             )
-            
+
             assert token == "connection-token-123"
             mock_descope_client.mgmt.outbound_application.fetch_token_by_scopes.assert_called_once()
 
@@ -66,19 +76,24 @@ class TestDirectFunctions:
         """Test tenant token fetching."""
         config = DescopeConfig(
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
-            management_key="test-key"
+            management_key="test-key",
         )
-        
-        with patch('descope_mcp.descope_mcp._get_descope_client', return_value=mock_descope_client):
+
+        with patch(
+            "descope_mcp.descope_mcp._get_descope_client",
+            return_value=mock_descope_client,
+        ):
             import asyncio
-            result = asyncio.run(fetch_tenant_token(
-                config=config,
-                app_id="slack-workspace",
-                tenant_id="tenant-123"
-            ))
-            
+
+            result = asyncio.run(
+                fetch_tenant_token(
+                    config=config, app_id="slack-workspace", tenant_id="tenant-123"
+                )
+            )
+
             # Result is JSON string
             import json
+
             token_data = json.loads(result)
             assert "token" in token_data
 
@@ -86,19 +101,26 @@ class TestDirectFunctions:
         """Test tenant token fetching with scopes."""
         config = DescopeConfig(
             well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
-            management_key="test-key"
+            management_key="test-key",
         )
-        
-        with patch('descope_mcp.descope_mcp._get_descope_client', return_value=mock_descope_client):
+
+        with patch(
+            "descope_mcp.descope_mcp._get_descope_client",
+            return_value=mock_descope_client,
+        ):
             import asyncio
-            result = asyncio.run(fetch_tenant_token_by_scopes(
-                config=config,
-                app_id="slack-workspace",
-                tenant_id="tenant-123",
-                scopes=["channels:read"]
-            ))
-            
+
+            result = asyncio.run(
+                fetch_tenant_token_by_scopes(
+                    config=config,
+                    app_id="slack-workspace",
+                    tenant_id="tenant-123",
+                    scopes=["channels:read"],
+                )
+            )
+
             import json
+
             token_data = json.loads(result)
             assert "token" in token_data
 
@@ -111,7 +133,9 @@ class TestDirectFunctions:
 
         mock_httpx = MagicMock()
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"token": {"accessToken": "tenant-access-token-xyz"}}
+        mock_resp.json.return_value = {
+            "token": {"accessToken": "tenant-access-token-xyz"}
+        }
         mock_resp.raise_for_status.return_value = None
         mock_httpx.post.return_value = mock_resp
 
@@ -147,7 +171,9 @@ class TestDirectFunctions:
 
         mock_httpx = MagicMock()
         mock_resp = MagicMock()
-        mock_resp.json.return_value = {"token": {"accessToken": "tenant-access-token-scoped"}}
+        mock_resp.json.return_value = {
+            "token": {"accessToken": "tenant-access-token-scoped"}
+        }
         mock_resp.raise_for_status.return_value = None
         mock_httpx.post.return_value = mock_resp
 
@@ -177,21 +203,23 @@ class TestDirectFunctions:
 
     def test_descope_mcp_class_based(self, mock_descope_client):
         """Test class-based API."""
-        with patch('descope_mcp.descope_mcp._get_descope_client', return_value=mock_descope_client):
+        with patch(
+            "descope_mcp.descope_mcp._get_descope_client",
+            return_value=mock_descope_client,
+        ):
             client = DescopeMCP(
                 well_known_url="https://api.descope.com/test/.well-known/openid-configuration",
                 management_key="test-key",
-                mcp_server_url="https://test-mcp-server.com"
+                mcp_server_url="https://test-mcp-server.com",
             )
-            
+
             # Mock the client's _client attribute
             client._client = mock_descope_client
-            
+
             user_id = client.validate_token_and_get_user_id("test-token")
             assert user_id == "user-123"
-            
+
             token = client.get_connection_token(
-                user_id="user-123",
-                app_id="google-calendar"
+                user_id="user-123", app_id="google-calendar"
             )
             assert token == "connection-token-123"
