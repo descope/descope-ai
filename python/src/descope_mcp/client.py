@@ -73,7 +73,7 @@ class DescopeMCPClient:
         Raises:
             Exception: If the request fails
         """
-        arguments = {
+        arguments: Dict[str, Any] = {
             "app_id": app_id,
             "user_id": user_id,
             "scopes": scopes,
@@ -116,7 +116,7 @@ class DescopeMCPClient:
         if tenant_id:
             arguments["tenant_id"] = tenant_id
         if options:
-            arguments["options"] = options
+            arguments["options"] = options  # type: ignore[assignment]
 
         result = await self._call_tool("fetch_user_token", arguments)
         return self._parse_token_response(result)
@@ -142,7 +142,7 @@ class DescopeMCPClient:
         Raises:
             Exception: If the request fails
         """
-        arguments = {
+        arguments: Dict[str, Any] = {
             "app_id": app_id,
             "tenant_id": tenant_id,
             "scopes": scopes,
@@ -173,7 +173,7 @@ class DescopeMCPClient:
         Raises:
             Exception: If the request fails
         """
-        arguments = {
+        arguments: Dict[str, Any] = {
             "app_id": app_id,
             "tenant_id": tenant_id,
         }

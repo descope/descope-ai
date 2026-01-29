@@ -19,12 +19,12 @@ except ImportError:  # pragma: no cover
     httpx = None
 
 try:
-    from importlib.metadata import version
+    from importlib.metadata import version as _get_version  # type: ignore[no-redef]
 except ImportError:  # pragma: no cover
     try:
-        from importlib_metadata import version
+        from importlib_metadata import version as _get_version  # type: ignore[no-redef]
     except ImportError:
-        from pkg_resources import get_distribution as version
+        from pkg_resources import get_distribution as _get_version  # type: ignore[no-redef]
 
 # Import DescopeClient lazily for runtime compatibility in restricted environments.
 # (Some environments may block requests/SSL initialization at import time.)
@@ -54,7 +54,7 @@ def _get_sdk_version() -> str:
     """Get the version of this SDK."""
     try:
         # First try to get from package metadata
-        return version("descope-mcp")  # type: ignore
+        return _get_version("descope-mcp")  # type: ignore
     except Exception:
         try:
             # Fallback to package's __version__
