@@ -24,7 +24,9 @@ except ImportError:  # pragma: no cover
     try:
         from importlib_metadata import version as _get_version  # type: ignore[no-redef]
     except ImportError:
+        # isort: off
         from pkg_resources import get_distribution as _get_version  # type: ignore[no-redef]
+        # isort: on
 
 # Import DescopeClient lazily for runtime compatibility in restricted environments.
 # (Some environments may block requests/SSL initialization at import time.)
